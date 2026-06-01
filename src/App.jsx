@@ -132,8 +132,14 @@ function App() {
     // Prepare data for export
     const exportData = books.map(book => {
       const { isReceived, _searchableBarcodes, _original, ...rest } = book;
+      
+      // Replace any whitespace (newlines, spaces) in barcodes with "、"
+      let exportBarcode = String(rest['登錄號'] || '').trim();
+      exportBarcode = exportBarcode.replace(/\s+/g, '、');
+
       return {
         ...rest,
+        '登錄號': exportBarcode,
         '點收狀態': isReceived ? '已到館' : '未到館'
       };
     });
@@ -157,7 +163,7 @@ function App() {
         
         if (!cell) continue;
 
-        // Force ISBN to string to prevent scientific notation in Excel
+        // Force ISBN and 登錄號 to string to prevent scientific notation in Excel
         if (colName === 'ISBN' || colName === '登錄號') {
            cell.t = 's';
            cell.v = String(cell.v);
@@ -165,9 +171,19 @@ function App() {
         }
 
         // Highlight modified cells in red
-        if (originalBook[colName] !== undefined && String(originalBook[colName]).trim() !== String(cell.v).trim()) {
-           if (!cell.s) cell.s = {};
-           cell.s.font = { color: { rgb: "FF0000" } };
+        if (originalBook[colName] !== undefined) {
+           let originalValue = String(originalBook[colName]).trim();
+           let currentValue = String(cell.v).trim();
+           
+           // Normalize 登錄號 for comparison because we injected '、'
+           if (colName === '登錄號') {
+             originalValue = originalValue.replace(/\s+/g, '、');
+           }
+
+           if (originalValue !== currentValue) {
+             if (!cell.s) cell.s = {};
+             cell.s.font = { color: { rgb: "FF0000" } };
+           }
         }
       }
     }
