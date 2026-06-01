@@ -157,6 +157,19 @@ function App() {
     XLSX.writeFile(workbook, outFileName);
   };
 
+  const handleEditBook = (index, key, newValue) => {
+    setBooks(prevBooks => {
+      const newBooks = [...prevBooks];
+      newBooks[index] = { ...newBooks[index], [key]: newValue };
+      
+      // If they edited the barcode, we must update the searchable array too
+      if (key === '登錄號') {
+         newBooks[index]._searchableBarcodes = String(newValue).trim().split(/\s+/).filter(b => b);
+      }
+      return newBooks;
+    });
+  };
+
   const totalBooks = books.length;
   const receivedBooks = books.filter(book => book.isReceived).length;
 
@@ -179,7 +192,7 @@ function App() {
               onExport={handleExport} 
               onClear={handleClearData}
             />
-            <BookList books={books} />
+            <BookList books={books} onEditBook={handleEditBook} />
           </div>
         )}
       </main>

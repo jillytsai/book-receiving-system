@@ -1,6 +1,6 @@
 import { CheckCircle, Clock } from 'lucide-react';
 
-export default function BookList({ books }) {
+export default function BookList({ books, onEditBook }) {
   if (!books || books.length === 0) return null;
 
   // Dynamically extract all column names, ignoring internal states and unwanted columns
@@ -35,8 +35,23 @@ export default function BookList({ books }) {
                   )}
                 </td>
                 {columns.map(col => (
-                  <td key={col} style={col === '題名' ? { minWidth: '200px', maxWidth: '400px', whiteSpace: 'normal', wordBreak: 'break-word' } : {}}>
-                    {book[col] || '-'}
+                  <td 
+                    key={col} 
+                    style={{
+                      ...(col === '題名' ? { minWidth: '200px', maxWidth: '400px', whiteSpace: 'normal', wordBreak: 'break-word' } : {}),
+                      cursor: 'text'
+                    }}
+                    title="點擊即可直接修改"
+                    contentEditable={true}
+                    suppressContentEditableWarning={true}
+                    onBlur={(e) => {
+                      const newValue = e.target.innerText.trim();
+                      if (newValue !== String(book[col] || '').trim()) {
+                        onEditBook(index, col, newValue);
+                      }
+                    }}
+                  >
+                    {book[col] || ''}
                   </td>
                 ))}
               </tr>
