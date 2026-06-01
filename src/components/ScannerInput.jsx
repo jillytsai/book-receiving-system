@@ -7,14 +7,23 @@ export default function ScannerInput({ onScan, successPulse }) {
 
   // Keep focus on input for continuous scanning
   useEffect(() => {
-    const focusInput = () => {
+    const focusInput = (e) => {
+      // Don't steal focus if they clicked on something that needs focus (like the table cells)
+      if (e && e.target) {
+        const tag = e.target.tagName.toLowerCase();
+        const isEditable = e.target.isContentEditable;
+        if (tag === 'input' || tag === 'textarea' || tag === 'select' || tag === 'button' || isEditable) {
+          return;
+        }
+      }
+      
       if (inputRef.current) {
         inputRef.current.focus();
       }
     };
     
     focusInput();
-    // Re-focus when clicking anywhere outside
+    // Re-focus when clicking empty space
     window.addEventListener('click', focusInput);
     return () => window.removeEventListener('click', focusInput);
   }, []);
