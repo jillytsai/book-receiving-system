@@ -1,9 +1,37 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { CheckCircle, Clock } from 'lucide-react';
 
 
 
 export default function BookList({ books, onEditBook }) {
+  const topScrollRef = useRef(null);
+  const tableContainerRef = useRef(null);
+  const tableRef = useRef(null);
+  const [tableWidth, setTableWidth] = useState(0);
+
+  useEffect(() => {
+    if (!tableRef.current) return;
+    const observer = new ResizeObserver(entries => {
+      for (let entry of entries) {
+        setTableWidth(entry.contentRect.width);
+      }
+    });
+    observer.observe(tableRef.current);
+    return () => observer.disconnect();
+  }, [books]);
+
+  const handleTopScroll = () => {
+    if (tableContainerRef.current && topScrollRef.current) {
+      tableContainerRef.current.scrollLeft = topScrollRef.current.scrollLeft;
+    }
+  };
+
+  const handleTableScroll = () => {
+    if (tableContainerRef.current && topScrollRef.current) {
+      topScrollRef.current.scrollLeft = tableContainerRef.current.scrollLeft;
+    }
+  };
+
   if (!books || books.length === 0) return null;
 
   // Dynamically extract all column names, ignoring internal states and unwanted columns
@@ -22,8 +50,26 @@ export default function BookList({ books, onEditBook }) {
         </span>
       </div>
 
-      <div className="table-container" style={{ flexGrow: 1 }}>
-        <table>
+      {/* Top Scrollbar Container */}
+      {tableWidth > 0 && (
+        <div 
+          ref={topScrollRef}
+          onScroll={handleTopScroll}
+          style={{ 
+            overflowX: 'auto', 
+            overflowY: 'hidden',
+            border: '1px solid var(--border-color)',
+            borderBottom: 'none',
+            borderRadius: '8px 8px 0 0',
+            backgroundColor: 'var(--surface-color)'
+          }}
+        >
+          <div style={{ width: `${tableWidth}px`, height: '1px' }}></div>
+        </div>
+      )}
+
+      <div className="table-container" style={{ flexGrow: 1, marginTop: '0', borderRadius: '0 0 8px 8px' }} ref={tableContainerRef} onScroll={handleTableScroll}>
+        <table ref={tableRef}>
           <thead>
             <tr>
               <th style={{ width: '100px' }}>狀態</th>
