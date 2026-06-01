@@ -1,4 +1,54 @@
+import { useState, useEffect } from 'react';
 import { CheckCircle, Clock } from 'lucide-react';
+
+function EditableCell({ value, onSave, isTitle }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [currentValue, setCurrentValue] = useState(value || '');
+
+  useEffect(() => {
+    setCurrentValue(value || '');
+  }, [value]);
+
+  if (isEditing) {
+    return (
+      <td style={{ padding: '0.5rem' }}>
+        <input 
+          autoFocus
+          style={{ width: '100%', minWidth: '100px', padding: '0.5rem', background: 'var(--surface-color-light)', color: 'white', border: '1px solid var(--accent-primary)', borderRadius: '4px', outline: 'none' }}
+          value={currentValue}
+          onChange={e => setCurrentValue(e.target.value)}
+          onBlur={() => {
+            setIsEditing(false);
+            if (currentValue.trim() !== String(value || '').trim()) {
+              onSave(currentValue.trim());
+            }
+          }}
+          onKeyDown={e => {
+            if (e.key === 'Enter') {
+              setIsEditing(false);
+              if (currentValue.trim() !== String(value || '').trim()) {
+                onSave(currentValue.trim());
+              }
+            }
+          }}
+        />
+      </td>
+    );
+  }
+
+  return (
+    <td 
+      onClick={() => setIsEditing(true)}
+      style={{
+        ...(isTitle ? { minWidth: '200px', maxWidth: '400px', whiteSpace: 'normal', wordBreak: 'break-word' } : {}),
+        cursor: 'pointer'
+      }}
+      title="點擊即可修改"
+    >
+      {value || '-'}
+    </td>
+  );
+}
 
 export default function BookList({ books, onEditBook }) {
   if (!books || books.length === 0) return null;
@@ -35,24 +85,12 @@ export default function BookList({ books, onEditBook }) {
                   )}
                 </td>
                 {columns.map(col => (
-                  <td 
-                    key={col} 
-                    style={{
-                      ...(col === '題名' ? { minWidth: '200px', maxWidth: '400px', whiteSpace: 'normal', wordBreak: 'break-word' } : {}),
-                      cursor: 'text'
-                    }}
-                    title="點擊即可直接修改"
-                    contentEditable={true}
-                    suppressContentEditableWarning={true}
-                    onBlur={(e) => {
-                      const newValue = e.target.innerText.trim();
-                      if (newValue !== String(book[col] || '').trim()) {
-                        onEditBook(index, col, newValue);
-                      }
-                    }}
-                  >
-                    {book[col] || ''}
-                  </td>
+                  <EditableCell 
+                    key={col}
+                    value={book[col]}
+                    isTitle={col === '題名'}
+                    onSave={(newValue) => onEditBook(index, col, newValue)}
+                  />
                 ))}
               </tr>
             ))}
