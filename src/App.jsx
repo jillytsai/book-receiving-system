@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style';
 import FileUpload from './components/FileUpload';
 import ScannerInput from './components/ScannerInput';
 import BookList from './components/BookList';
@@ -72,8 +72,7 @@ function App() {
           }
         });
 
-        // Skip the total row at the bottom: 
-        // According to user, the total row has no title (題名) and no ISBN.
+        // Skip the total row at the bottom
         const title = String(rowObj['題名'] || '').trim();
         const isbn = String(rowObj['ISBN'] || '').trim();
         
@@ -81,7 +80,6 @@ function App() {
           return;
         }
 
-        // Handle possible multiple barcodes (e.g. separated by newline or space)
         const rawBarcode = String(rowObj['登錄號'] || '').trim();
         const barcodes = rawBarcode.split(/\s+/).filter(b => b);
 
@@ -89,7 +87,8 @@ function App() {
           ...rowObj,
           '登錄號': rawBarcode,
           _searchableBarcodes: barcodes,
-          isReceived: false
+          isReceived: false,
+          _original: { ...rowObj, '登錄號': rawBarcode }
         });
       });
 
@@ -104,21 +103,17 @@ function App() {
     setBooks(prevBooks => {
       const newBooks = [...prevBooks];
       
-      // Find index of the scanned book by checking the searchable array
       const bookIndex = newBooks.findIndex(book => 
         book._searchableBarcodes && book._searchableBarcodes.includes(barcode)
       );
       
       if (bookIndex !== -1) {
         found = true;
-        // Mark as received
         newBooks[bookIndex] = { ...newBooks[bookIndex], isReceived: true };
         
-        // Optionally, move to the top of the list
         const scannedBook = newBooks.splice(bookIndex, 1)[0];
         newBooks.unshift(scannedBook);
         
-        // Trigger success animation
         setSuccessPulse(true);
         setTimeout(() => setSuccessPulse(false), 1500);
       }
@@ -134,26 +129,56 @@ function App() {
   const handleExport = () => {
     if (books.length === 0) return;
 
-    // Prepare data for export: original columns + 點收狀態
+    // Prepare data for export
     const exportData = books.map(book => {
-      const { isReceived, _searchableBarcodes, ...rest } = book;
+      const { isReceived, _searchableBarcodes, _original, ...rest } = book;
       return {
         ...rest,
         '點收狀態': isReceived ? '已到館' : '未到館'
       };
     });
 
-    // Create a new workbook and add the worksheet
     const worksheet = XLSX.utils.json_to_sheet(exportData);
+
+    // Apply formatting to cells
+    const range = XLSX.utils.decode_range(worksheet['!ref']);
+    const headers = [];
+    for(let C = range.s.c; C <= range.e.c; ++C) {
+      const cell = worksheet[XLSX.utils.encode_cell({c: C, r: 0})];
+      if (cell) headers[C] = cell.v;
+    }
+
+    for(let R = range.s.r + 1; R <= range.e.r; ++R) {
+      const originalBook = books[R - 1]?._original || {};
+      for(let C = range.s.c; C <= range.e.c; ++C) {
+        const colName = headers[C];
+        const cellAddress = XLSX.utils.encode_cell({c: C, r: R});
+        const cell = worksheet[cellAddress];
+        
+        if (!cell) continue;
+
+        // Force ISBN to string to prevent scientific notation in Excel
+        if (colName === 'ISBN' || colName === '登錄號') {
+           cell.t = 's';
+           cell.v = String(cell.v);
+           cell.z = '@';
+        }
+
+        // Highlight modified cells in red
+        if (originalBook[colName] !== undefined && String(originalBook[colName]).trim() !== String(cell.v).trim()) {
+           if (!cell.s) cell.s = {};
+           cell.s.font = { color: { rgb: "FF0000" } };
+        }
+      }
+    }
+
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, '點收結果');
 
-    // Generate file name based on original or default
     const outFileName = originalFileName 
       ? originalFileName.replace(/\.[^/.]+$/, "") + '_點收結果.xlsx' 
       : '圖書點收結果.xlsx';
 
-    // Download the file
     XLSX.writeFile(workbook, outFileName);
   };
 

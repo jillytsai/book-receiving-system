@@ -35,8 +35,21 @@ export default function BookList({ books, onEditBook }) {
   if (!books || books.length === 0) return null;
 
   // Dynamically extract all column names, ignoring internal states and unwanted columns
-  const excludedColumns = ['isReceived', '_searchableBarcodes', '箱號', '紙插序號'];
-  const columns = Object.keys(books[0]).filter(key => !excludedColumns.includes(key));
+  const excludedColumns = ['isReceived', '_searchableBarcodes', '箱號', '紙插序號', '_original'];
+  let columns = Object.keys(books[0]).filter(key => !excludedColumns.includes(key));
+
+  // Move '置放地點' right after '出版年'
+  const locationIndex = columns.indexOf('置放地點');
+  if (locationIndex !== -1) {
+    columns.splice(locationIndex, 1);
+    const pubYearIndex = columns.indexOf('出版年');
+    if (pubYearIndex !== -1) {
+      columns.splice(pubYearIndex + 1, 0, '置放地點');
+    } else {
+      // fallback if 出版年 doesn't exist for some reason
+      columns.push('置放地點');
+    }
+  }
 
   return (
     <div className="glass-panel animate-fade-in" style={{ padding: '2rem', display: 'flex', flexDirection: 'column' }}>
