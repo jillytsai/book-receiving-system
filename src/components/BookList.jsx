@@ -109,9 +109,13 @@ export default function BookList({ books, onEditBook }) {
               <tr key={book['登錄號'] + '-' + index} style={{ backgroundColor: book.isReceived ? 'rgba(16, 185, 129, 0.05)' : 'transparent' }}>
                 <td>
                   {book.isReceived ? (
-                    <span className="badge badge-success">已點收</span>
+                    <span className="status-badge received">
+                      <CheckCircle size={14} /> 已點收
+                    </span>
                   ) : (
-                    <span className="badge badge-pending">未點收</span>
+                    <span className="status-badge pending">
+                      <Clock size={14} /> 未點收
+                    </span>
                   )}
                 </td>
                 {columns.map(col => (
