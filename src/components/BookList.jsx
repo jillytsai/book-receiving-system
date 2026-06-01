@@ -52,8 +52,8 @@ export default function BookList({ books, onEditBook }) {
   }
 
   return (
-    <div className="glass-panel animate-fade-in" style={{ padding: '2rem', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+    <div className="glass-panel animate-fade-in" style={{ padding: '0.75rem', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
         <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <CheckCircle className="text-accent" />
           圖書清單明細

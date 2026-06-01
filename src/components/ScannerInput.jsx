@@ -40,7 +40,7 @@ export default function ScannerInput({ onScan, successPulse }) {
 
   return (
     <div className={`glass-panel scanner-container animate-fade-in ${successPulse ? 'pulse-green' : ''}`}>
-      <h2 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+      <h2 style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
         <ScanLine color="var(--accent-primary)" />
         條碼掃描區
       </h2>
