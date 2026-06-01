@@ -100,19 +100,19 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Layout Utilities */
 .container {
-  max-width: 98%;
+  max-width: 100%;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 1rem 0.5rem;
   width: 100%;
 }
 
 .header {
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
   text-align: center;
 }
 
 .header h1 {
-  font-size: 2.5rem;
+  font-size: 2rem;
   background: linear-gradient(135deg, #a5b4fc 0%, #6366f1 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -121,7 +121,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .header p {
   color: var(--text-secondary);
-  font-size: 1.1rem;
+  font-size: 1rem;
 }
 
 /* Buttons */
@@ -130,10 +130,10 @@ h1, h2, h3, h4, h5, h6 {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  padding: 0.75rem 1.5rem;
+  padding: 0.5rem 1rem;
   border-radius: 8px;
   font-weight: 500;
-  font-size: 1rem;
+  font-size: 0.95rem;
   cursor: pointer;
   transition: all 0.2s ease;
   border: none;
@@ -171,7 +171,7 @@ h1, h2, h3, h4, h5, h6 {
 .upload-area {
   border: 2px dashed var(--border-color);
   border-radius: 12px;
-  padding: 3rem 2rem;
+  padding: 2.5rem 1.5rem;
   text-align: center;
   transition: all 0.3s ease;
   cursor: pointer;
@@ -185,7 +185,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .upload-icon {
   color: var(--accent-primary);
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
 }
 
 /* Scanner Input */
@@ -193,8 +193,8 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 2rem;
-  margin-bottom: 2rem;
+  padding: 1rem;
+  margin-bottom: 1rem;
 }
 
 .scanner-input-wrapper {
@@ -205,8 +205,8 @@ h1, h2, h3, h4, h5, h6 {
 
 .scanner-input {
   width: 100%;
-  padding: 1rem 1.5rem 1rem 3rem;
-  font-size: 1.25rem;
+  padding: 0.75rem 1.5rem 0.75rem 2.5rem;
+  font-size: 1.1rem;
   background-color: var(--surface-color-light);
   border: 2px solid var(--border-color);
   border-radius: 12px;
@@ -223,15 +223,15 @@ h1, h2, h3, h4, h5, h6 {
 
 .scanner-icon {
   position: absolute;
-  left: 1rem;
+  left: 0.75rem;
   top: 50%;
   transform: translateY(-50%);
   color: var(--text-secondary);
 }
 
 .scanner-status {
-  margin-top: 1rem;
-  font-size: 0.9rem;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
   height: 20px;
 }
 
@@ -243,8 +243,8 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem;
-  margin-bottom: 2rem;
+  padding: 1rem 1.5rem;
+  margin-bottom: 1rem;
 }
 
 .stat-item {
@@ -253,14 +253,14 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .stat-label {
-  font-size: 0.875rem;
+  font-size: 0.8rem;
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
 
 .stat-value {
-  font-size: 2rem;
+  font-size: 1.5rem;
   font-weight: 700;
   color: white;
 }
@@ -272,8 +272,8 @@ h1, h2, h3, h4, h5, h6 {
 /* Progress Bar */
 .progress-container {
   flex-grow: 1;
-  margin: 0 2rem;
-  height: 8px;
+  margin: 0 1.5rem;
+  height: 6px;
   background-color: var(--surface-color-light);
   border-radius: 4px;
   overflow: hidden;
@@ -288,8 +288,8 @@ h1, h2, h3, h4, h5, h6 {
 /* Book List Table */
 .table-container {
   overflow-x: auto;
-  margin-top: 1rem;
-  border-radius: 8px;
+  margin-top: 0;
+  border-radius: 0 0 8px 8px;
   border: 1px solid var(--border-color);
 }
 
@@ -297,6 +297,7 @@ table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
+  font-size: 0.85rem;
 }
 
 th {
@@ -304,7 +305,7 @@ th {
   top: 0;
   z-index: 10;
   background-color: var(--surface-color-light);
-  padding: 1rem;
+  padding: 0.5rem 0.25rem;
   font-weight: 600;
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border-color);
@@ -312,9 +313,10 @@ th {
 }
 
 td {
-  padding: 1rem;
+  padding: 0.4rem 0.25rem;
   border-bottom: 1px solid var(--border-color);
   color: var(--text-primary);
+  vertical-align: middle;
 }
 
 tbody tr {
