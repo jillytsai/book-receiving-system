@@ -287,8 +287,7 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Book List Table */
 .table-container {
-  overflow: auto;
-  max-height: 65vh; /* Keep scrollbar in view */
+  overflow-x: auto;
   margin-top: 1rem;
   border-radius: 8px;
   border: 1px solid var(--border-color);
