@@ -133,6 +133,10 @@ function App() {
     const exportData = books.map(book => {
       const { isReceived, _searchableBarcodes, _original, ...rest } = book;
       
+      // Remove unwanted columns for export
+      delete rest['箱號'];
+      delete rest['紙插序號'];
+
       // Replace any whitespace (newlines, spaces) in barcodes with "、"
       let exportBarcode = String(rest['登錄號'] || '').trim();
       exportBarcode = exportBarcode.replace(/\s+/g, '、');
@@ -154,8 +158,41 @@ function App() {
       if (cell) headers[C] = cell.v;
     }
 
-    for(let R = range.s.r + 1; R <= range.e.r; ++R) {
-      const originalBook = books[R - 1]?._original || {};
+    // Set specific column widths to fit A4 landscape
+    const headerWidths = {
+      '序號': 4.5,
+      'ISBN': 13,
+      '登錄號': 16,
+      '題名': 20,
+      '著者': 10,
+      '出版者': 10,
+      '出版年': 6,
+      '定價': 6,
+      '數量': 4,
+      '冊數': 4,
+      '總冊數': 5,
+      '折扣': 6,
+      '售價': 6,
+      '總售價': 6,
+      '介購單位': 8,
+      '介購人': 8,
+      '是否預約': 6,
+      '置放地點': 10,
+      '書目紀錄ID(記錄識別欄) 001段': 10,
+      '書目紀錄ID(記錄識別欄)': 10,
+      '備註': 8,
+      '點收狀態': 8
+    };
+    worksheet['!cols'] = headers.map(h => ({ wch: headerWidths[h] || 10 }));
+
+    // Setup page for A4 landscape printing, fitting to 1 page wide
+    worksheet['!pageSetup'] = { paperSize: 9, orientation: 'landscape', fitToWidth: 1, fitToHeight: 0 };
+    worksheet['!fitToPage'] = true;
+    worksheet['!margins'] = { left: 0.25, right: 0.25, top: 0.5, bottom: 0.5, header: 0.3, footer: 0.3 };
+
+    for(let R = range.s.r; R <= range.e.r; ++R) {
+      const originalBook = R > 0 ? (books[R - 1]?._original || {}) : {};
+      
       for(let C = range.s.c; C <= range.e.c; ++C) {
         const colName = headers[C];
         const cellAddress = XLSX.utils.encode_cell({c: C, r: R});
@@ -170,8 +207,19 @@ function App() {
            cell.z = '@';
         }
 
-        // Highlight modified cells in red
-        if (originalBook[colName] !== undefined) {
+        // Apply base styles: font size 9, wrap text, vertical top alignment
+        if (!cell.s) cell.s = {};
+        if (!cell.s.font) cell.s.font = { sz: 9 };
+        else cell.s.font.sz = 9;
+        
+        if (!cell.s.alignment) cell.s.alignment = { wrapText: true, vertical: 'top' };
+        else {
+           cell.s.alignment.wrapText = true;
+           cell.s.alignment.vertical = 'top';
+        }
+
+        // Highlight modified cells in red (skip header row)
+        if (R > 0 && originalBook[colName] !== undefined) {
            let originalValue = String(originalBook[colName]).trim();
            let currentValue = String(cell.v).trim();
            
@@ -181,8 +229,7 @@ function App() {
            }
 
            if (originalValue !== currentValue) {
-             if (!cell.s) cell.s = {};
-             cell.s.font = { color: { rgb: "FF0000" } };
+             cell.s.font.color = { rgb: "FF0000" };
            }
         }
       }
