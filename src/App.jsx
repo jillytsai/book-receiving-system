@@ -158,37 +158,37 @@ function App() {
       if (cell) headers[C] = cell.v;
     }
 
-    // Set specific column widths to fit A4 landscape
+    // Set specific column widths to fit A4 landscape (tightly packed)
     const headerWidths = {
-      '序號': 4.5,
+      '序號': 4,
       'ISBN': 13,
-      '登錄號': 16,
-      '題名': 20,
-      '著者': 10,
-      '出版者': 10,
-      '出版年': 6,
-      '定價': 6,
-      '數量': 4,
-      '冊數': 4,
-      '總冊數': 5,
-      '折扣': 6,
-      '售價': 6,
-      '總售價': 6,
-      '介購單位': 8,
-      '介購人': 8,
-      '是否預約': 6,
-      '置放地點': 10,
-      '書目紀錄ID(記錄識別欄) 001段': 10,
-      '書目紀錄ID(記錄識別欄)': 10,
-      '備註': 8,
-      '點收狀態': 8
+      '登錄號': 15,
+      '題名': 18,
+      '著者': 8,
+      '出版者': 8,
+      '出版年': 5,
+      '定價': 5,
+      '數量': 3.5,
+      '冊數': 3.5,
+      '總冊數': 4.5,
+      '折扣': 5,
+      '售價': 5,
+      '總售價': 5,
+      '介購單位': 7,
+      '介購人': 6,
+      '是否預約': 5,
+      '置放地點': 9,
+      '書目紀錄ID(記錄識別欄) 001段': 8,
+      '書目紀錄ID(記錄識別欄)': 8,
+      '備註': 6,
+      '點收狀態': 6
     };
-    worksheet['!cols'] = headers.map(h => ({ wch: headerWidths[h] || 10 }));
+    worksheet['!cols'] = headers.map(h => ({ wch: headerWidths[h] || 8 }));
 
     // Setup page for A4 landscape printing, fitting to 1 page wide
     worksheet['!pageSetup'] = { paperSize: 9, orientation: 'landscape', fitToWidth: 1, fitToHeight: 0 };
     worksheet['!fitToPage'] = true;
-    worksheet['!margins'] = { left: 0.25, right: 0.25, top: 0.5, bottom: 0.5, header: 0.3, footer: 0.3 };
+    worksheet['!margins'] = { left: 0.1, right: 0.1, top: 0.3, bottom: 0.3, header: 0.1, footer: 0.1 };
 
     for(let R = range.s.r; R <= range.e.r; ++R) {
       const originalBook = R > 0 ? (books[R - 1]?._original || {}) : {};
@@ -207,10 +207,10 @@ function App() {
            cell.z = '@';
         }
 
-        // Apply base styles: font size 9, wrap text, vertical top alignment
+        // Apply base styles: font size 8, wrap text, vertical top alignment
         if (!cell.s) cell.s = {};
-        if (!cell.s.font) cell.s.font = { sz: 9 };
-        else cell.s.font.sz = 9;
+        if (!cell.s.font) cell.s.font = { sz: 8 };
+        else cell.s.font.sz = 8;
         
         if (!cell.s.alignment) cell.s.alignment = { wrapText: true, vertical: 'top' };
         else {
