@@ -106,6 +106,7 @@ function App() {
               ...rowObj,
               '登錄號': rawBarcode,
               _searchableBarcodes: barcodes,
+              _scannedBarcodes: [],
               isReceived: false,
               _original: { ...rowObj, '登錄號': rawBarcode }
             });
@@ -145,7 +146,17 @@ function App() {
       
       if (bookIndex !== -1) {
         found = true;
-        newBooks[bookIndex] = { ...newBooks[bookIndex], isReceived: true };
+        const targetBook = newBooks[bookIndex];
+        const allBarcodes = targetBook._searchableBarcodes || [];
+        const prevScanned = targetBook._scannedBarcodes || (targetBook.isReceived ? allBarcodes : []);
+        const nextScanned = prevScanned.includes(barcode) ? prevScanned : [...prevScanned, barcode];
+        const isAllReceived = allBarcodes.length > 0 && allBarcodes.every(b => nextScanned.includes(b));
+
+        newBooks[bookIndex] = {
+          ...targetBook,
+          _scannedBarcodes: nextScanned,
+          isReceived: isAllReceived
+        };
         
         const scannedBook = newBooks.splice(bookIndex, 1)[0];
         newBooks.unshift(scannedBook);
@@ -167,7 +178,7 @@ function App() {
 
     // Prepare data for export
     const exportData = books.map(book => {
-      const { isReceived, _searchableBarcodes, _original, ...rest } = book;
+      const { isReceived, _searchableBarcodes, _scannedBarcodes, _original, ...rest } = book;
       
       // Remove unwanted columns for export
       delete rest['箱號'];
@@ -177,10 +188,21 @@ function App() {
       let exportBarcode = String(rest['登錄號'] || '').trim();
       exportBarcode = exportBarcode.replace(/\s+/g, '、');
 
+      const allBarcodes = _searchableBarcodes || [];
+      const scanned = _scannedBarcodes || (isReceived ? allBarcodes : []);
+      const isAllReceived = allBarcodes.length > 0 && allBarcodes.every(b => scanned.includes(b));
+      
+      let statusText = '未到館';
+      if (isAllReceived) {
+        statusText = '已到館';
+      } else if (scanned.length > 0) {
+        statusText = `部分到館 (${scanned.length}/${allBarcodes.length})`;
+      }
+
       return {
         ...rest,
         '登錄號': exportBarcode,
-        '點收狀態': isReceived ? '已到館' : '未到館'
+        '點收狀態': statusText
       };
     });
 
@@ -228,6 +250,7 @@ function App() {
 
     for(let R = range.s.r; R <= range.e.r; ++R) {
       const originalBook = R > 0 ? (books[R - 1]?._original || {}) : {};
+      const currentBook = R > 0 ? books[R - 1] : null;
       
       for(let C = range.s.c; C <= range.e.c; ++C) {
         const colName = headers[C];
@@ -269,14 +292,21 @@ function App() {
            }
         }
 
-        // Highlight '未到館' in red
-        if (R > 0 && colName === '點收狀態' && cell.v === '未到館') {
-           cell.s.font.color = { rgb: "FF0000" };
+        // Highlight '未到館' or '部分到館' in red
+        if (R > 0 && colName === '點收狀態') {
+           if (cell.v === '未到館' || String(cell.v).startsWith('部分到館')) {
+             cell.s.font.color = { rgb: "FF0000" };
+           }
         }
 
-        // Highlight unreceived barcode ('登錄號') in red
-        if (R > 0 && colName === '登錄號' && !books[R - 1]?.isReceived) {
-           cell.s.font.color = { rgb: "FF0000" };
+        // Highlight unreceived or partially received barcode ('登錄號') in red
+        if (R > 0 && colName === '登錄號' && currentBook) {
+           const allBarcodes = currentBook._searchableBarcodes || [];
+           const scanned = currentBook._scannedBarcodes || (currentBook.isReceived ? allBarcodes : []);
+           const isAllReceived = allBarcodes.length > 0 && allBarcodes.every(b => scanned.includes(b));
+           if (!isAllReceived) {
+             cell.s.font.color = { rgb: "FF0000" };
+           }
         }
       }
     }
@@ -298,7 +328,12 @@ function App() {
       
       // If they edited the barcode, we must update the searchable array too
       if (key === '登錄號') {
-         newBooks[index]._searchableBarcodes = String(newValue).trim().split(/\s+/).filter(b => b);
+         const newBarcodes = String(newValue).trim().split(/\s+/).filter(b => b);
+         newBooks[index]._searchableBarcodes = newBarcodes;
+         const currentScanned = newBooks[index]._scannedBarcodes || [];
+         const filteredScanned = currentScanned.filter(b => newBarcodes.includes(b));
+         newBooks[index]._scannedBarcodes = filteredScanned;
+         newBooks[index].isReceived = newBarcodes.length > 0 && newBarcodes.every(b => filteredScanned.includes(b));
       }
       return newBooks;
     });

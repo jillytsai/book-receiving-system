@@ -35,7 +35,7 @@ export default function BookList({ books, onEditBook }) {
   if (!books || books.length === 0) return null;
 
   // Dynamically extract all column names, ignoring internal states and unwanted columns
-  const excludedKeywords = ['isReceived', '_searchableBarcodes', '箱號', '紙插序號', '_original', '書目紀錄ID', '備註'];
+  const excludedKeywords = ['isReceived', '_searchableBarcodes', '_scannedBarcodes', '箱號', '紙插序號', '_original', '書目紀錄ID', '備註'];
   let columns = Object.keys(books[0]).filter(key => {
     return !excludedKeywords.some(kw => key.includes(kw));
   });
@@ -94,55 +94,71 @@ export default function BookList({ books, onEditBook }) {
             </tr>
           </thead>
           <tbody>
-            {books.map((book, index) => (
-              <tr key={book['登錄號'] + '-' + index} style={{ backgroundColor: book.isReceived ? 'rgba(16, 185, 129, 0.05)' : 'transparent' }}>
-                <td>
-                  {book.isReceived ? (
-                    <span className="status-badge received">
-                      <CheckCircle size={14} /> 已點收
-                    </span>
-                  ) : (
-                    <span className="status-badge pending">
-                      <Clock size={14} /> 未點收
-                    </span>
-                  )}
-                </td>
-                {columns.map(col => (
-                  <td 
-                    key={col}
-                    style={{
-                      ...(col === '題名' ? { minWidth: '200px', maxWidth: '400px', whiteSpace: 'normal', wordBreak: 'break-word' } : {}),
-                      verticalAlign: 'top'
-                    }}
-                  >
-                    <div
-                      contentEditable={true}
-                      suppressContentEditableWarning={true}
-                      spellCheck={false}
-                      onBlur={(e) => {
-                        const newValue = e.target.innerText.trim();
-                        if (newValue !== String(book[col] || '').trim()) {
-                          onEditBook(index, col, newValue);
-                        }
-                      }}
-                      style={{
-                        outline: 'none',
-                        minHeight: '1.5em',
-                        cursor: 'text',
-                        padding: '0.25rem',
-                        borderRadius: '4px',
-                        transition: 'background 0.2s',
-                      }}
-                      onFocus={(e) => e.target.style.background = 'rgba(255,255,255,0.1)'}
-                      onMouseLeave={(e) => { if (document.activeElement !== e.target) e.target.style.background = 'transparent'; }}
-                      onMouseEnter={(e) => { if (document.activeElement !== e.target) e.target.style.background = 'rgba(255,255,255,0.05)'; }}
-                    >
-                      {book[col] || ''}
-                    </div>
+            {books.map((book, index) => {
+              const allBarcodes = book._searchableBarcodes || [];
+              const scanned = book._scannedBarcodes || (book.isReceived ? allBarcodes : []);
+              const isAllReceived = allBarcodes.length > 0 && allBarcodes.every(b => scanned.includes(b));
+              const isPartialReceived = !isAllReceived && scanned.length > 0;
+
+              return (
+                <tr key={book['登錄號'] + '-' + index} style={{ backgroundColor: isAllReceived ? 'rgba(16, 185, 129, 0.05)' : isPartialReceived ? 'rgba(245, 158, 11, 0.05)' : 'transparent' }}>
+                  <td>
+                    {isAllReceived ? (
+                      <span className="status-badge received">
+                        <CheckCircle size={14} /> 已點收
+                      </span>
+                    ) : isPartialReceived ? (
+                      <span className="status-badge" style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+                        <Clock size={14} /> 部分點收 ({scanned.length}/{allBarcodes.length})
+                      </span>
+                    ) : (
+                      <span className="status-badge pending">
+                        <Clock size={14} /> 未點收
+                      </span>
+                    )}
                   </td>
-                ))}
-              </tr>
-            ))}
+                  {columns.map(col => {
+                    const isUnscannedBarcode = col === '登錄號' && !isAllReceived;
+
+                    return (
+                      <td 
+                        key={col}
+                        style={{
+                          ...(col === '題名' ? { minWidth: '200px', maxWidth: '400px', whiteSpace: 'normal', wordBreak: 'break-word' } : {}),
+                          verticalAlign: 'top'
+                        }}
+                      >
+                        <div
+                          contentEditable={true}
+                          suppressContentEditableWarning={true}
+                          spellCheck={false}
+                          onBlur={(e) => {
+                            const newValue = e.target.innerText.trim();
+                            if (newValue !== String(book[col] || '').trim()) {
+                              onEditBook(index, col, newValue);
+                            }
+                          }}
+                          style={{
+                            outline: 'none',
+                            minHeight: '1.5em',
+                            cursor: 'text',
+                            padding: '0.25rem',
+                            borderRadius: '4px',
+                            transition: 'background 0.2s',
+                            color: isUnscannedBarcode ? '#ef4444' : 'inherit'
+                          }}
+                          onFocus={(e) => e.target.style.background = 'rgba(255,255,255,0.1)'}
+                          onMouseLeave={(e) => { if (document.activeElement !== e.target) e.target.style.background = 'transparent'; }}
+                          onMouseEnter={(e) => { if (document.activeElement !== e.target) e.target.style.background = 'rgba(255,255,255,0.05)'; }}
+                        >
+                          {book[col] || ''}
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
