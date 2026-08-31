@@ -35,8 +35,10 @@ export default function BookList({ books, onEditBook }) {
   if (!books || books.length === 0) return null;
 
   // Dynamically extract all column names, ignoring internal states and unwanted columns
-  const excludedColumns = ['isReceived', '_searchableBarcodes', '箱號', '紙插序號', '_original', '書目紀錄ID(記錄識別欄) 001段', '書目紀錄ID(記錄識別欄)', '備註'];
-  let columns = Object.keys(books[0]).filter(key => !excludedColumns.includes(key));
+  const excludedKeywords = ['isReceived', '_searchableBarcodes', '箱號', '紙插序號', '_original', '書目紀錄ID', '備註'];
+  let columns = Object.keys(books[0]).filter(key => {
+    return !excludedKeywords.some(kw => key.includes(kw));
+  });
 
   // Move '置放地點' right after '出版年'
   const locationIndex = columns.indexOf('置放地點');

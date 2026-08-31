@@ -20,81 +20,117 @@ function App() {
 
   // Auto-save whenever books or file name changes
   useEffect(() => {
-    localStorage.setItem('bookReceivingBooks', JSON.stringify(books));
+    try {
+      localStorage.setItem('bookReceivingBooks', JSON.stringify(books));
+    } catch (e) {
+      console.warn('localStorage save failed:', e);
+    }
   }, [books]);
 
   useEffect(() => {
-    localStorage.setItem('bookReceivingFileName', originalFileName);
+    try {
+      localStorage.setItem('bookReceivingFileName', originalFileName);
+    } catch (e) {
+      console.warn('localStorage save failed:', e);
+    }
   }, [originalFileName]);
 
   const handleClearData = () => {
     if (window.confirm('確定要放棄目前的點收進度，並重新上傳清單嗎？')) {
       setBooks([]);
       setOriginalFileName('');
-      localStorage.removeItem('bookReceivingBooks');
-      localStorage.removeItem('bookReceivingFileName');
+      try {
+        localStorage.removeItem('bookReceivingBooks');
+        localStorage.removeItem('bookReceivingFileName');
+      } catch (e) {
+        console.warn('localStorage remove failed:', e);
+      }
     }
   };
 
   const handleFileUpload = (file) => {
-    setOriginalFileName(file.name);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const data = new Uint8Array(e.target.result);
-      const workbook = XLSX.read(data, { type: 'array' });
-      const firstSheetName = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[firstSheetName];
-      
-      // Read as 2D array to find the correct header row
-      const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-      
-      // Find the header row (the one containing '登錄號')
-      let headerRowIndex = 0;
-      for (let i = 0; i < Math.min(20, rawData.length); i++) {
-        if (rawData[i].some(cell => String(cell).includes('登錄號'))) {
-          headerRowIndex = i;
-          break;
-        }
-      }
-
-      const headers = rawData[headerRowIndex].map(h => String(h).trim());
-      const dataRows = rawData.slice(headerRowIndex + 1);
-
-      // Create object array and handle multiple barcodes in one cell
-      const initializedData = [];
-      dataRows.forEach(row => {
-        if (!row.some(cell => cell !== '')) return; // Skip completely empty rows
-        
-        let rowObj = {};
-        headers.forEach((header, index) => {
-          if (header) {
-            rowObj[header] = row[index];
+    try {
+      setOriginalFileName(file.name);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          
+          // Read as 2D array to find the correct header row
+          const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+          
+          // Find the header row (the one containing '登錄號')
+          let headerRowIndex = -1;
+          for (let i = 0; i < Math.min(20, rawData.length); i++) {
+            if (rawData[i].some(cell => String(cell).includes('登錄號'))) {
+              headerRowIndex = i;
+              break;
+            }
           }
-        });
 
-        // Skip the total row at the bottom
-        const title = String(rowObj['題名'] || '').trim();
-        const isbn = String(rowObj['ISBN'] || '').trim();
-        
-        if (!title && !isbn) {
-          return;
+          if (headerRowIndex === -1) {
+            alert('在 Excel 的前 20 列中找不到「登錄號」欄位，請確認清單格式是否正確！');
+            return;
+          }
+
+          const headers = rawData[headerRowIndex].map(h => String(h).replace(/\s+/g, ' ').trim());
+          const dataRows = rawData.slice(headerRowIndex + 1);
+
+          // Create object array and handle multiple barcodes in one cell
+          const initializedData = [];
+          dataRows.forEach(row => {
+            if (!row.some(cell => cell !== '')) return; // Skip completely empty rows
+            
+            let rowObj = {};
+            headers.forEach((header, index) => {
+              if (header) {
+                rowObj[header] = row[index];
+              }
+            });
+
+            // Skip the total row at the bottom
+            const title = String(rowObj['題名'] || '').trim();
+            const isbn = String(rowObj['ISBN'] || '').trim();
+            
+            if (!title && !isbn) {
+              return;
+            }
+
+            const rawBarcode = String(rowObj['登錄號'] || '').trim();
+            const barcodes = rawBarcode.split(/\s+/).filter(b => b);
+
+            initializedData.push({
+              ...rowObj,
+              '登錄號': rawBarcode,
+              _searchableBarcodes: barcodes,
+              isReceived: false,
+              _original: { ...rowObj, '登錄號': rawBarcode }
+            });
+          });
+
+          if (initializedData.length === 0) {
+            alert('上傳的 Excel 檔案中沒有讀取到任何書籍資料！');
+            return;
+          }
+
+          setBooks(initializedData);
+        } catch (err) {
+          console.error('檔案解析失敗:', err);
+          alert('Excel 檔案解析失敗：' + err.message);
         }
-
-        const rawBarcode = String(rowObj['登錄號'] || '').trim();
-        const barcodes = rawBarcode.split(/\s+/).filter(b => b);
-
-        initializedData.push({
-          ...rowObj,
-          '登錄號': rawBarcode,
-          _searchableBarcodes: barcodes,
-          isReceived: false,
-          _original: { ...rowObj, '登錄號': rawBarcode }
-        });
-      });
-
-      setBooks(initializedData);
-    };
-    reader.readAsArrayBuffer(file);
+      };
+      reader.onerror = (err) => {
+        console.error('檔案讀取失敗:', err);
+        alert('讀取檔案失敗，請重新嘗試！');
+      };
+      reader.readAsArrayBuffer(file);
+    } catch (err) {
+      console.error(err);
+      alert('上傳失敗：' + err.message);
+    }
   };
 
   const handleScan = (barcode) => {
