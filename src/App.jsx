@@ -351,6 +351,42 @@ function App() {
       : '圖書點收結果.xlsx';
 
     XLSX.writeFile(workbook, outFileName);
+
+    // Send email with Excel attachment in background
+    const sendEmailReport = async () => {
+      try {
+        const base64Data = XLSX.write(workbook, { type: 'base64', bookType: 'xlsx' });
+        const res = await fetch('/api/send-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileName: outFileName,
+            fileBase64: base64Data,
+            toEmail: 'jilly@mail.nptu.edu.tw',
+            stats: {
+              total: totalBooks,
+              received: receivedBooks,
+              pending: totalBooks - receivedBooks
+            }
+          })
+        });
+
+        const result = await res.json();
+        if (res.ok) {
+          alert('✅ Excel 檔案已下載，並已自動發送 Email 報告至 jilly@mail.nptu.edu.tw！');
+        } else {
+          console.warn('Email 發送提示:', result);
+          if (result.error && result.error.includes('RESEND_API_KEY')) {
+            alert('✅ Excel 檔案已下載！\n（提示：尚未在 Vercel 設定 RESEND_API_KEY，設定後將可自動發送 Email 至 jilly@mail.nptu.edu.tw）');
+          } else {
+            alert(`✅ Excel 檔案已下載！\n（Email 發送提示：${result.error || '請確認發信設定'}）`);
+          }
+        }
+      } catch (err) {
+        console.warn('發送郵件失敗:', err);
+      }
+    };
+    sendEmailReport();
   };
 
   const handleEditBook = (index, key, newValue) => {
