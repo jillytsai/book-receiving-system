@@ -265,6 +265,13 @@ function App() {
     worksheet['!fitToPage'] = true;
     worksheet['!margins'] = { left: 0.1, right: 0.1, top: 0.3, bottom: 0.3, header: 0.1, footer: 0.1 };
 
+    const borderThin = {
+      top: { style: 'thin', color: { rgb: '000000' } },
+      bottom: { style: 'thin', color: { rgb: '000000' } },
+      left: { style: 'thin', color: { rgb: '000000' } },
+      right: { style: 'thin', color: { rgb: '000000' } }
+    };
+
     for(let R = range.s.r; R <= range.e.r; ++R) {
       const originalBook = R > 0 ? (books[R - 1]?._original || {}) : {};
       const currentBook = R > 0 ? books[R - 1] : null;
@@ -283,8 +290,10 @@ function App() {
            cell.z = '@';
         }
 
-        // Apply base styles: font size 8, wrap text, vertical top alignment
+        // Apply base styles: font size 8, wrap text, vertical top alignment, and full borders
         if (!cell.s) cell.s = {};
+        cell.s.border = borderThin;
+
         if (!cell.s.font) cell.s.font = { sz: 8 };
         else cell.s.font.sz = 8;
         
@@ -292,6 +301,12 @@ function App() {
         else {
            cell.s.alignment.wrapText = true;
            cell.s.alignment.vertical = 'top';
+        }
+
+        // Style header row
+        if (R === 0) {
+          cell.s.font.bold = true;
+          cell.s.fill = { fgColor: { rgb: 'F2F2F2' } };
         }
 
         // Highlight modified cells in red (skip header row)
