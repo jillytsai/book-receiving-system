@@ -8,8 +8,24 @@ import Statistics from './components/Statistics';
 function App() {
   // Initialize state from localStorage if available
   const [books, setBooks] = useState(() => {
-    const saved = localStorage.getItem('bookReceivingBooks');
-    return saved ? JSON.parse(saved) : [];
+    try {
+      const saved = localStorage.getItem('bookReceivingBooks');
+      if (!saved) return [];
+      const parsed = JSON.parse(saved);
+      return parsed.map(b => {
+        if (!b._scannedBarcodes) {
+          const all = b._searchableBarcodes || [];
+          return {
+            ...b,
+            _scannedBarcodes: b.isReceived ? all : []
+          };
+        }
+        return b;
+      });
+    } catch (e) {
+      console.warn(e);
+      return [];
+    }
   });
   
   const [originalFileName, setOriginalFileName] = useState(() => {
@@ -148,7 +164,7 @@ function App() {
         found = true;
         const targetBook = newBooks[bookIndex];
         const allBarcodes = targetBook._searchableBarcodes || [];
-        const prevScanned = targetBook._scannedBarcodes || (targetBook.isReceived ? allBarcodes : []);
+        const prevScanned = targetBook._scannedBarcodes || [];
         const nextScanned = prevScanned.includes(barcode) ? prevScanned : [...prevScanned, barcode];
         const isAllReceived = allBarcodes.length > 0 && allBarcodes.every(b => nextScanned.includes(b));
 
@@ -189,14 +205,15 @@ function App() {
       exportBarcode = exportBarcode.replace(/\s+/g, '、');
 
       const allBarcodes = _searchableBarcodes || [];
-      const scanned = _scannedBarcodes || (isReceived ? allBarcodes : []);
-      const isAllReceived = allBarcodes.length > 0 && allBarcodes.every(b => scanned.includes(b));
+      const scanned = _scannedBarcodes || [];
+      const missingBarcodes = allBarcodes.filter(b => !scanned.includes(b));
+      const isAllReceived = allBarcodes.length > 0 && missingBarcodes.length === 0;
       
       let statusText = '未到館';
       if (isAllReceived) {
         statusText = '已到館';
       } else if (scanned.length > 0) {
-        statusText = `部分到館 (${scanned.length}/${allBarcodes.length})`;
+        statusText = `部分到館 (缺: ${missingBarcodes.join('、')})`;
       }
 
       return {
@@ -220,7 +237,7 @@ function App() {
     const headerWidths = {
       '序號': 4,
       'ISBN': 13,
-      '登錄號': 15,
+      '登錄號': 16,
       '題名': 18,
       '著者': 8,
       '出版者': 8,
@@ -239,7 +256,7 @@ function App() {
       '書目紀錄ID(記錄識別欄) 001段': 8,
       '書目紀錄ID(記錄識別欄)': 8,
       '備註': 6,
-      '點收狀態': 6
+      '點收狀態': 8
     };
     worksheet['!cols'] = headers.map(h => ({ wch: headerWidths[h] || 8 }));
 
@@ -302,7 +319,7 @@ function App() {
         // Highlight unreceived or partially received barcode ('登錄號') in red
         if (R > 0 && colName === '登錄號' && currentBook) {
            const allBarcodes = currentBook._searchableBarcodes || [];
-           const scanned = currentBook._scannedBarcodes || (currentBook.isReceived ? allBarcodes : []);
+           const scanned = currentBook._scannedBarcodes || [];
            const isAllReceived = allBarcodes.length > 0 && allBarcodes.every(b => scanned.includes(b));
            if (!isAllReceived) {
              cell.s.font.color = { rgb: "FF0000" };

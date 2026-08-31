@@ -118,13 +118,15 @@ export default function BookList({ books, onEditBook }) {
                     )}
                   </td>
                   {columns.map(col => {
-                    const isUnscannedBarcode = col === '登錄號' && !isAllReceived;
+                    const isBarcodeCol = col === '登錄號';
+                    const isUnscanned = isBarcodeCol && !isAllReceived;
 
                     return (
                       <td 
                         key={col}
                         style={{
                           ...(col === '題名' ? { minWidth: '200px', maxWidth: '400px', whiteSpace: 'normal', wordBreak: 'break-word' } : {}),
+                          ...(isBarcodeCol ? { minWidth: '170px' } : {}),
                           verticalAlign: 'top'
                         }}
                       >
@@ -145,13 +147,24 @@ export default function BookList({ books, onEditBook }) {
                             padding: '0.25rem',
                             borderRadius: '4px',
                             transition: 'background 0.2s',
-                            color: isUnscannedBarcode ? '#ef4444' : 'inherit'
+                            color: isUnscanned && allBarcodes.length <= 1 ? '#ef4444' : 'inherit'
                           }}
                           onFocus={(e) => e.target.style.background = 'rgba(255,255,255,0.1)'}
                           onMouseLeave={(e) => { if (document.activeElement !== e.target) e.target.style.background = 'transparent'; }}
                           onMouseEnter={(e) => { if (document.activeElement !== e.target) e.target.style.background = 'rgba(255,255,255,0.05)'; }}
                         >
-                          {book[col] || ''}
+                          {isBarcodeCol && allBarcodes.length > 1 ? (
+                            allBarcodes.map((bCode, bIdx) => {
+                              const isBScanned = scanned.includes(bCode);
+                              return (
+                                <div key={bIdx} style={{ color: isBScanned ? '#10b981' : '#ef4444', fontWeight: isBScanned ? 400 : 600 }}>
+                                  {isBScanned ? `✓ ${bCode}` : `✗ ${bCode} (未點)`}
+                                </div>
+                              );
+                            })
+                          ) : (
+                            book[col] || ''
+                          )}
                         </div>
                       </td>
                     );
