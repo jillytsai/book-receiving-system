@@ -268,6 +268,16 @@ function App() {
              cell.s.font.color = { rgb: "FF0000" };
            }
         }
+
+        // Highlight '未到館' in red
+        if (R > 0 && colName === '點收狀態' && cell.v === '未到館') {
+           cell.s.font.color = { rgb: "FF0000" };
+        }
+
+        // Highlight unreceived barcode ('登錄號') in red
+        if (R > 0 && colName === '登錄號' && !books[R - 1]?.isReceived) {
+           cell.s.font.color = { rgb: "FF0000" };
+        }
       }
     }
 
