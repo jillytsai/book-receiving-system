@@ -88,8 +88,13 @@ function App() {
   }, [activeBatchId]);
 
   // Current active batch helper
+  const isAllOverview = activeBatchId === 'all' && batches.length > 1;
   const activeBatch = batches.find(b => b.id === activeBatchId) || batches[0] || null;
-  const currentBooks = activeBatch?.books || [];
+  
+  const currentBooks = isAllOverview
+    ? batches.flatMap(batch => batch.books.map(b => ({ ...b, 來源批次: batch.name, _batchId: batch.id })))
+    : (activeBatch?.books || []);
+
   const currentMode = activeBatch?.receivingMode || 'barcode';
   const totalBooks = currentBooks.length;
   const receivedBooks = currentBooks.filter(book => book.isReceived).length;
@@ -195,23 +200,30 @@ function App() {
 
   const handleScan = (inputVal) => {
     const cleanInput = String(inputVal).trim();
-    if (!cleanInput || !activeBatch) return;
+    if (!cleanInput) return;
 
-    let foundInActive = false;
-    const mode = activeBatch.receivingMode;
+    let foundBatchName = '';
+    const mode = currentMode;
 
-    // 1. Try matching in the currently active batch
+    // 1. Try matching in the currently active batch (or any batch if in overview mode)
     setBatches(prevBatches => {
-      return prevBatches.map(batch => {
-        if (batch.id !== activeBatch.id) return batch;
+      let matched = false;
+
+      const updated = prevBatches.map(batch => {
+        // If not in overview and not active batch, skip for primary scan
+        if (!isAllOverview && batch.id !== activeBatch?.id) return batch;
+        if (matched) return batch;
 
         const newBooks = [...batch.books];
-        if (mode === 'barcode') {
+        const batchMode = isAllOverview ? mode : batch.receivingMode;
+
+        if (batchMode === 'barcode') {
           const bookIndex = newBooks.findIndex(book =>
             book._searchableBarcodes && book._searchableBarcodes.includes(cleanInput)
           );
           if (bookIndex !== -1) {
-            foundInActive = true;
+            matched = true;
+            foundBatchName = batch.name;
             const targetBook = newBooks[bookIndex];
             const allBarcodes = targetBook._searchableBarcodes || [];
             const prevScanned = targetBook._scannedBarcodes || [];
@@ -248,14 +260,16 @@ function App() {
               )
             );
             if (alreadyFull !== -1) {
-              foundInActive = true;
-              alert(`⚠️ ISBN: ${cleanInput} 的書籍已全數點收完成！`);
+              matched = true;
+              foundBatchName = batch.name;
+              alert(`⚠️ 在「${batch.name}」中，ISBN: ${cleanInput} 的書籍已全數點收完成！`);
               return batch;
             }
           }
 
           if (bookIndex !== -1) {
-            foundInActive = true;
+            matched = true;
+            foundBatchName = batch.name;
             const targetBook = newBooks[bookIndex];
             const targetQty = targetBook._targetQuantity || 1;
             const nextCount = (targetBook._scannedISBNCount || 0) + 1;
@@ -275,33 +289,37 @@ function App() {
 
         return { ...batch, books: newBooks };
       });
+
+      return updated;
     });
 
-    if (foundInActive) return;
+    if (foundBatchName) return;
 
-    // 2. Check if the book exists in ANOTHER batch
-    const otherBatch = batches.find(b => {
-      if (b.id === activeBatch.id) return false;
-      if (b.receivingMode === 'barcode') {
-        return b.books.some(book => book._searchableBarcodes && book._searchableBarcodes.includes(cleanInput));
-      } else {
-        const scannedCleanISBN = normalizeISBN(cleanInput);
-        return b.books.some(book =>
-          book._searchableISBNs && book._searchableISBNs.some(isbn =>
-            isbn === scannedCleanISBN || scannedCleanISBN.includes(isbn) || isbn.includes(scannedCleanISBN)
-          )
-        );
-      }
-    });
+    // 2. If not in overview and not found in active batch, check OTHER batches
+    if (!isAllOverview) {
+      const otherBatch = batches.find(b => {
+        if (b.id === activeBatch?.id) return false;
+        if (b.receivingMode === 'barcode') {
+          return b.books.some(book => book._searchableBarcodes && book._searchableBarcodes.includes(cleanInput));
+        } else {
+          const scannedCleanISBN = normalizeISBN(cleanInput);
+          return b.books.some(book =>
+            book._searchableISBNs && book._searchableISBNs.some(isbn =>
+              isbn === scannedCleanISBN || scannedCleanISBN.includes(isbn) || isbn.includes(scannedCleanISBN)
+            )
+          );
+        }
+      });
 
-    if (otherBatch) {
-      if (window.confirm(`💡 提示：在批次「${otherBatch.name}」中找到此書籍！\n是否立即切換至「${otherBatch.name}」進行點收？`)) {
-        setActiveBatchId(otherBatch.id);
-        setTimeout(() => {
-          handleScan(cleanInput);
-        }, 150);
+      if (otherBatch) {
+        if (window.confirm(`💡 提示：在批次「${otherBatch.name}」中找到此書籍！\n是否立即切換至「${otherBatch.name}」進行點收？`)) {
+          setActiveBatchId(otherBatch.id);
+          setTimeout(() => {
+            handleScan(cleanInput);
+          }, 150);
+        }
+        return;
       }
-      return;
     }
 
     // 3. Not found in any batch
@@ -313,11 +331,15 @@ function App() {
   };
 
   const handleExport = () => {
-    if (!activeBatch || currentBooks.length === 0) return;
+    if (currentBooks.length === 0) return;
+
+    const exportBatchName = isAllOverview 
+      ? `全部批次合併_${batches.map(b => b.name).join('_')}`
+      : (activeBatch?.name || '圖書點收');
 
     // Prepare data for export
     const exportData = currentBooks.map(book => {
-      const { isReceived, _searchableBarcodes, _scannedBarcodes, _searchableISBNs, _scannedISBNCount, _targetQuantity, _original, ...rest } = book;
+      const { isReceived, _searchableBarcodes, _scannedBarcodes, _searchableISBNs, _scannedISBNCount, _targetQuantity, _original, _batchId, ...rest } = book;
       
       delete rest['箱號'];
       delete rest['紙插序號'];
@@ -366,6 +388,7 @@ function App() {
     }
 
     const headerWidths = {
+      '來源批次': 12,
       '序號': 4,
       'ISBN': 13,
       '登錄號': 16,
@@ -475,9 +498,9 @@ function App() {
     }
 
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, activeBatch.name || '點收結果');
+    XLSX.utils.book_append_sheet(workbook, worksheet, isAllOverview ? '全部批次合併' : (activeBatch?.name || '點收結果'));
 
-    const outFileName = `${activeBatch.name || '圖書點收'}_點收結果.xlsx`;
+    const outFileName = `${exportBatchName}_點收結果.xlsx`;
 
     XLSX.writeFile(workbook, outFileName);
 
@@ -519,23 +542,34 @@ function App() {
   };
 
   const handleEditBook = (index, key, newValue) => {
-    if (!activeBatchId) return;
+    const targetBook = currentBooks[index];
+    if (!targetBook) return;
+
+    const targetBatchId = isAllOverview ? targetBook._batchId : activeBatchId;
 
     setBatches(prevBatches => {
       return prevBatches.map(batch => {
-        if (batch.id !== activeBatchId) return batch;
+        if (batch.id !== targetBatchId) return batch;
 
         const newBooks = [...batch.books];
-        newBooks[index] = { ...newBooks[index], [key]: newValue };
+        const bookIdxInBatch = newBooks.findIndex(b => 
+          (b['序號'] && b['序號'] === targetBook['序號'] && b['題名'] === targetBook['題名']) ||
+          (b['登錄號'] === targetBook['登錄號'] && b['ISBN'] === targetBook['ISBN'])
+        );
+
+        const editIndex = bookIdxInBatch !== -1 ? bookIdxInBatch : index;
+        if (!newBooks[editIndex]) return batch;
+
+        newBooks[editIndex] = { ...newBooks[editIndex], [key]: newValue };
         
         if (key === '登錄號') {
            const newBarcodes = String(newValue).trim().split(/\s+/).filter(b => b);
-           newBooks[index]._searchableBarcodes = newBarcodes;
-           const currentScanned = newBooks[index]._scannedBarcodes || [];
+           newBooks[editIndex]._searchableBarcodes = newBarcodes;
+           const currentScanned = newBooks[editIndex]._scannedBarcodes || [];
            const filteredScanned = currentScanned.filter(b => newBarcodes.includes(b));
-           newBooks[index]._scannedBarcodes = filteredScanned;
+           newBooks[editIndex]._scannedBarcodes = filteredScanned;
            if (batch.receivingMode === 'barcode') {
-             newBooks[index].isReceived = newBarcodes.length > 0 && newBarcodes.every(b => filteredScanned.includes(b));
+             newBooks[editIndex].isReceived = newBarcodes.length > 0 && newBarcodes.every(b => filteredScanned.includes(b));
            }
         }
 
@@ -543,14 +577,14 @@ function App() {
           const rawISBN = String(newValue).trim();
           const normalized = normalizeISBN(rawISBN);
           const isbnList = rawISBN.split(/[\s,;、\n\r]+/).map(normalizeISBN).filter(Boolean);
-          newBooks[index]._searchableISBNs = isbnList.length > 0 ? isbnList : (normalized ? [normalized] : []);
+          newBooks[editIndex]._searchableISBNs = isbnList.length > 0 ? isbnList : (normalized ? [normalized] : []);
         }
 
         if (key === '數量' || key === '冊數') {
           const parsed = parseInt(String(newValue).trim(), 10) || 1;
-          newBooks[index]._targetQuantity = Math.max(parsed, (newBooks[index]._searchableBarcodes || []).length, 1);
+          newBooks[editIndex]._targetQuantity = Math.max(parsed, (newBooks[editIndex]._searchableBarcodes || []).length, 1);
           if (batch.receivingMode === 'isbn') {
-            newBooks[index].isReceived = (newBooks[index]._scannedISBNCount || 0) >= newBooks[index]._targetQuantity;
+            newBooks[editIndex].isReceived = (newBooks[editIndex]._scannedISBNCount || 0) >= newBooks[editIndex]._targetQuantity;
           }
         }
 
@@ -583,11 +617,15 @@ function App() {
   };
 
   const handleModeChange = (newMode) => {
-    if (isAddingBatch || batches.length === 0) {
+    if (batches.length === 0) {
       setNewBatchMode(newMode);
       return;
     }
-    setBatches(prev => prev.map(b => b.id === activeBatchId ? { ...b, receivingMode: newMode } : b));
+    if (isAllOverview) {
+      setBatches(prev => prev.map(b => ({ ...b, receivingMode: newMode })));
+    } else {
+      setBatches(prev => prev.map(b => b.id === activeBatchId ? { ...b, receivingMode: newMode } : b));
+    }
   };
 
   return (
@@ -598,15 +636,41 @@ function App() {
       </header>
 
       <main>
-        {batches.length === 0 || isAddingBatch ? (
+        {batches.length === 0 ? (
           <FileUpload 
             onFileUpload={handleFileUpload} 
             receivingMode={newBatchMode} 
             onModeChange={setNewBatchMode} 
-            onCancel={batches.length > 0 ? () => setIsAddingBatch(false) : null}
           />
         ) : (
           <div className="animate-fade-in">
+            {/* Modal Dialog for Adding New Batch */}
+            {isAddingBatch && (
+              <div style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(0, 0, 0, 0.75)',
+                backdropFilter: 'blur(5px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 9999,
+                padding: '1rem'
+              }}>
+                <div style={{ maxWidth: '800px', width: '100%' }}>
+                  <FileUpload 
+                    onFileUpload={handleFileUpload} 
+                    receivingMode={newBatchMode} 
+                    onModeChange={setNewBatchMode} 
+                    onCancel={() => setIsAddingBatch(false)}
+                  />
+                </div>
+              </div>
+            )}
+
             <BatchTabs 
               batches={batches}
               activeBatchId={activeBatchId}
@@ -645,3 +709,4 @@ function App() {
 }
 
 export default App;
+

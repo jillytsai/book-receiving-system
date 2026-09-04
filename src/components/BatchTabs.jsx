@@ -1,4 +1,4 @@
-import { Plus, X, Barcode, Hash, Layers } from 'lucide-react';
+import { Plus, X, Barcode, Hash, Layers, Sparkles } from 'lucide-react';
 
 export default function BatchTabs({ 
   batches, 
@@ -9,6 +9,11 @@ export default function BatchTabs({
 }) {
   if (!batches || batches.length === 0) return null;
 
+  const totalAllBooks = batches.reduce((sum, b) => sum + (b.books?.length || 0), 0);
+  const totalAllReceived = batches.reduce((sum, b) => sum + (b.books?.filter(item => item.isReceived)?.length || 0), 0);
+  const totalAllPercent = totalAllBooks > 0 ? Math.round((totalAllReceived / totalAllBooks) * 100) : 0;
+  const isAllActive = activeBatchId === 'all';
+
   return (
     <div className="batch-tabs-container animate-fade-in" style={{
       display: 'flex',
@@ -16,15 +21,71 @@ export default function BatchTabs({
       gap: '0.5rem',
       marginBottom: '1rem',
       overflowX: 'auto',
-      paddingBottom: '0.25rem',
+      paddingBottom: '0.35rem',
       scrollbarWidth: 'thin'
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', color: 'var(--text-secondary)', fontSize: '0.85rem', whiteSpace: 'nowrap', marginRight: '0.25rem' }}>
         <Layers size={16} />
-        <span>批次清單：</span>
+        <span>批次切換：</span>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'nowrap' }}>
+        {/* All Batches Overview Tab (shown when multiple batches exist) */}
+        {batches.length > 1 && (
+          <div
+            onClick={() => onSelectBatch('all')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.45rem 0.85rem',
+              borderRadius: '8px',
+              cursor: 'pointer',
+              backgroundColor: isAllActive ? 'var(--surface-color-light)' : 'rgba(255, 255, 255, 0.03)',
+              border: isAllActive ? '1.5px solid #ec4899' : '1px solid var(--border-color)',
+              boxShadow: isAllActive ? '0 2px 10px rgba(236, 72, 153, 0.3)' : 'none',
+              transition: 'all 0.2s',
+              whiteSpace: 'nowrap',
+              userSelect: 'none'
+            }}
+          >
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.2rem',
+              fontSize: '0.75rem',
+              padding: '0.15rem 0.4rem',
+              borderRadius: '4px',
+              backgroundColor: 'rgba(236, 72, 153, 0.15)',
+              color: '#ec4899',
+              fontWeight: 600
+            }}>
+              <Sparkles size={12} />
+              總覽
+            </div>
+
+            <span style={{
+              fontWeight: isAllActive ? 600 : 'normal',
+              color: isAllActive ? 'white' : 'var(--text-secondary)',
+              fontSize: '0.9rem'
+            }}>
+              全部批次合併 ({batches.length} 批)
+            </span>
+
+            <span style={{
+              fontSize: '0.75rem',
+              padding: '0.1rem 0.4rem',
+              borderRadius: '10px',
+              backgroundColor: totalAllReceived === totalAllBooks && totalAllBooks > 0 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255, 255, 255, 0.08)',
+              color: totalAllReceived === totalAllBooks && totalAllBooks > 0 ? '#10b981' : 'var(--text-secondary)',
+              fontWeight: 500
+            }}>
+              {totalAllReceived}/{totalAllBooks} ({totalAllPercent}%)
+            </span>
+          </div>
+        )}
+
+        {/* Individual Batch Tabs */}
         {batches.map(batch => {
           const isActive = batch.id === activeBatchId;
           const total = batch.books?.length || 0;
@@ -70,7 +131,7 @@ export default function BatchTabs({
                 fontWeight: isActive ? 600 : 'normal',
                 color: isActive ? 'white' : 'var(--text-secondary)',
                 fontSize: '0.9rem',
-                maxWidth: '160px',
+                maxWidth: '180px',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis'
               }} title={batch.name}>
