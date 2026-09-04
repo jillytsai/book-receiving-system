@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { UploadCloud } from 'lucide-react';
+import { UploadCloud, Barcode, Hash } from 'lucide-react';
 
-export default function FileUpload({ onFileUpload }) {
+export default function FileUpload({ onFileUpload, receivingMode, onModeChange }) {
   const [dragActive, setDragActive] = useState(false);
 
   const handleDrag = (e) => {
@@ -31,7 +31,77 @@ export default function FileUpload({ onFileUpload }) {
   };
 
   return (
-    <div className="glass-panel animate-fade-in" style={{ padding: '2rem' }}>
+    <div className="glass-panel animate-fade-in" style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
+      <div style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
+        <h3 style={{ marginBottom: '0.75rem', fontSize: '1.1rem', color: 'var(--text-primary)' }}>
+          步驟 1：請選擇本次點收方式
+        </h3>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem' }}>
+          <button
+            type="button"
+            className="btn"
+            onClick={() => onModeChange('barcode')}
+            style={{
+              flex: '1',
+              maxWidth: '260px',
+              padding: '0.85rem 1rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              fontSize: '1rem',
+              fontWeight: receivingMode === 'barcode' ? '600' : 'normal',
+              backgroundColor: receivingMode === 'barcode' ? 'var(--accent-primary)' : 'var(--surface-color-light)',
+              color: 'white',
+              border: receivingMode === 'barcode' ? '2px solid var(--accent-primary)' : '2px solid var(--border-color)',
+              boxShadow: receivingMode === 'barcode' ? '0 0 15px rgba(99, 102, 241, 0.4)' : 'none',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            <Barcode size={20} />
+            條碼（登錄號）點收
+          </button>
+
+          <button
+            type="button"
+            className="btn"
+            onClick={() => onModeChange('isbn')}
+            style={{
+              flex: '1',
+              maxWidth: '260px',
+              padding: '0.85rem 1rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              fontSize: '1rem',
+              fontWeight: receivingMode === 'isbn' ? '600' : 'normal',
+              backgroundColor: receivingMode === 'isbn' ? 'var(--accent-primary)' : 'var(--surface-color-light)',
+              color: 'white',
+              border: receivingMode === 'isbn' ? '2px solid var(--accent-primary)' : '2px solid var(--border-color)',
+              boxShadow: receivingMode === 'isbn' ? '0 0 15px rgba(99, 102, 241, 0.4)' : 'none',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+          >
+            <Hash size={20} />
+            ISBN 點收
+          </button>
+        </div>
+        <p style={{ marginTop: '0.5rem', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+          {receivingMode === 'barcode' 
+            ? '🏷️ 目前模式：以書籍貼上的「登錄號條碼」進行核對與掃描' 
+            : '🔢 目前模式：以書籍封底「ISBN 條碼」進行核對與掃描'}
+        </p>
+      </div>
+
+      <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
+        <h3 style={{ fontSize: '1.1rem', color: 'var(--text-primary)', margin: 0 }}>
+          步驟 2：上傳交書清單 Excel
+        </h3>
+      </div>
+
       <div 
         className={`upload-area ${dragActive ? 'drag-active' : ''}`}
         onDragEnter={handleDrag}
@@ -47,9 +117,9 @@ export default function FileUpload({ onFileUpload }) {
           style={{ display: 'none' }} 
           onChange={handleChange} 
         />
-        <UploadCloud size={64} className="upload-icon" />
-        <h2 style={{ marginBottom: '0.5rem' }}>上傳圖書清單</h2>
-        <p style={{ color: 'var(--text-secondary)' }}>
+        <UploadCloud size={56} className="upload-icon" />
+        <h2 style={{ marginBottom: '0.5rem', fontSize: '1.4rem' }}>上傳圖書清單</h2>
+        <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
           拖曳 Excel 檔案至此，或點擊選擇檔案 (.xlsx)
         </p>
       </div>

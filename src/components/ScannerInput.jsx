@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { ScanLine } from 'lucide-react';
+import { ScanLine, Barcode, Hash } from 'lucide-react';
 
-export default function ScannerInput({ onScan, successPulse }) {
+export default function ScannerInput({ onScan, successPulse, receivingMode = 'barcode', onModeChange }) {
   const [inputValue, setInputValue] = useState('');
   const inputRef = useRef(null);
 
@@ -38,19 +38,69 @@ export default function ScannerInput({ onScan, successPulse }) {
     }
   };
 
+  const isBarcode = receivingMode === 'barcode';
+
   return (
     <div className={`glass-panel scanner-container animate-fade-in ${successPulse ? 'pulse-green' : ''}`}>
-      <h2 style={{ marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-        <ScanLine color="var(--accent-primary)" />
-        條碼掃描區
-      </h2>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', maxWidth: '500px', marginBottom: '0.5rem' }}>
+        <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1.25rem' }}>
+          <ScanLine color="var(--accent-primary)" />
+          {isBarcode ? '條碼（登錄號）掃描區' : 'ISBN 掃描區'}
+        </h2>
+
+        {onModeChange && (
+          <div style={{ display: 'flex', gap: '0.35rem', backgroundColor: 'rgba(255,255,255,0.05)', padding: '0.2rem', borderRadius: '6px' }}>
+            <button
+              type="button"
+              onClick={() => onModeChange('barcode')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+                border: 'none',
+                padding: '0.3rem 0.6rem',
+                borderRadius: '4px',
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+                backgroundColor: isBarcode ? 'var(--accent-primary)' : 'transparent',
+                color: isBarcode ? 'white' : 'var(--text-secondary)',
+                fontWeight: isBarcode ? 600 : 'normal'
+              }}
+            >
+              <Barcode size={14} />
+              條碼模式
+            </button>
+            <button
+              type="button"
+              onClick={() => onModeChange('isbn')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+                border: 'none',
+                padding: '0.3rem 0.6rem',
+                borderRadius: '4px',
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+                backgroundColor: !isBarcode ? 'var(--accent-primary)' : 'transparent',
+                color: !isBarcode ? 'white' : 'var(--text-secondary)',
+                fontWeight: !isBarcode ? 600 : 'normal'
+              }}
+            >
+              <Hash size={14} />
+              ISBN 模式
+            </button>
+          </div>
+        )}
+      </div>
+
       <div className="scanner-input-wrapper">
         <ScanLine size={20} className="scanner-icon" />
         <input
           ref={inputRef}
           type="text"
           className="scanner-input"
-          placeholder="請在此刷條碼或輸入登錄號..."
+          placeholder={isBarcode ? "請在此刷條碼或輸入登錄號..." : "請在此刷書籍 ISBN 條碼或輸入 ISBN..."}
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -59,7 +109,9 @@ export default function ScannerInput({ onScan, successPulse }) {
       </div>
       <div className="scanner-status">
         <span style={{ color: 'var(--text-secondary)' }}>
-          提示：掃描器通常會自動送出 Enter。如手動輸入請按 Enter 送出。
+          {isBarcode 
+            ? '提示：目前為【條碼模式】，掃描器刷入登錄號將自動送出 Enter。' 
+            : '提示：目前為【ISBN 模式】，掃描器刷入書籍 ISBN 條碼將自動核對到館。'}
         </span>
       </div>
     </div>

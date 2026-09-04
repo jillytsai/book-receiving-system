@@ -3,7 +3,7 @@ import { CheckCircle, Clock } from 'lucide-react';
 
 
 
-export default function BookList({ books, onEditBook }) {
+export default function BookList({ books, onEditBook, receivingMode = 'barcode' }) {
   const topScrollRef = useRef(null);
   const tableContainerRef = useRef(null);
   const tableRef = useRef(null);
@@ -35,7 +35,19 @@ export default function BookList({ books, onEditBook }) {
   if (!books || books.length === 0) return null;
 
   // Dynamically extract all column names, ignoring internal states and unwanted columns
-  const excludedKeywords = ['isReceived', '_searchableBarcodes', '_scannedBarcodes', '箱號', '紙插序號', '_original', '書目紀錄ID', '備註'];
+  const excludedKeywords = [
+    'isReceived', 
+    '_searchableBarcodes', 
+    '_scannedBarcodes', 
+    '_searchableISBNs', 
+    '_scannedISBNCount', 
+    '_targetQuantity', 
+    '箱號', 
+    '紙插序號', 
+    '_original', 
+    '書目紀錄ID', 
+    '備註'
+  ];
   let columns = Object.keys(books[0]).filter(key => {
     return !excludedKeywords.some(kw => key.includes(kw));
   });
@@ -59,6 +71,9 @@ export default function BookList({ books, onEditBook }) {
         <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <CheckCircle className="text-accent" />
           圖書清單明細
+          <span style={{ fontSize: '0.8rem', fontWeight: 'normal', color: 'var(--accent-primary)', backgroundColor: 'rgba(99, 102, 241, 0.1)', padding: '0.2rem 0.6rem', borderRadius: '12px', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
+            {receivingMode === 'barcode' ? '🏷️ 條碼點收模式' : '🔢 ISBN 點收模式'}
+          </span>
         </h2>
         <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
           共 {books.length} 筆資料 (點擊表格文字即可直接修改)
@@ -87,7 +102,7 @@ export default function BookList({ books, onEditBook }) {
         <table ref={tableRef}>
           <thead>
             <tr>
-              <th style={{ width: '100px' }}>狀態</th>
+              <th style={{ width: '110px' }}>狀態</th>
               {columns.map(col => (
                 <th key={col}>{col}</th>
               ))}
@@ -95,10 +110,20 @@ export default function BookList({ books, onEditBook }) {
           </thead>
           <tbody>
             {books.map((book, index) => {
+              // Barcode calculations
               const allBarcodes = book._searchableBarcodes || [];
-              const scanned = book._scannedBarcodes || (book.isReceived ? allBarcodes : []);
-              const isAllReceived = allBarcodes.length > 0 && allBarcodes.every(b => scanned.includes(b));
-              const isPartialReceived = !isAllReceived && scanned.length > 0;
+              const scannedBarcodes = book._scannedBarcodes || (book.isReceived ? allBarcodes : []);
+              const isAllBarcodesReceived = allBarcodes.length > 0 && allBarcodes.every(b => scannedBarcodes.includes(b));
+              const isPartialBarcodesReceived = !isAllBarcodesReceived && scannedBarcodes.length > 0;
+
+              // ISBN calculations
+              const targetQty = book._targetQuantity || 1;
+              const scannedISBNCount = book._scannedISBNCount ?? (book.isReceived ? targetQty : 0);
+              const isAllISBNReceived = scannedISBNCount >= targetQty && targetQty > 0;
+              const isPartialISBNReceived = !isAllISBNReceived && scannedISBNCount > 0;
+
+              const isAllReceived = receivingMode === 'barcode' ? isAllBarcodesReceived : isAllISBNReceived;
+              const isPartialReceived = receivingMode === 'barcode' ? isPartialBarcodesReceived : isPartialISBNReceived;
 
               return (
                 <tr key={book['登錄號'] + '-' + index} style={{ backgroundColor: isAllReceived ? 'rgba(16, 185, 129, 0.05)' : isPartialReceived ? 'rgba(245, 158, 11, 0.05)' : 'transparent' }}>
@@ -109,7 +134,7 @@ export default function BookList({ books, onEditBook }) {
                       </span>
                     ) : isPartialReceived ? (
                       <span className="status-badge" style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
-                        <Clock size={14} /> 部分點收 ({scanned.length}/{allBarcodes.length})
+                        <Clock size={14} /> 部分點收 ({receivingMode === 'barcode' ? `${scannedBarcodes.length}/${allBarcodes.length}` : `${scannedISBNCount}/${targetQty}`})
                       </span>
                     ) : (
                       <span className="status-badge pending">
@@ -119,7 +144,7 @@ export default function BookList({ books, onEditBook }) {
                   </td>
                   {columns.map(col => {
                     const isBarcodeCol = col === '登錄號';
-                    const isUnscanned = isBarcodeCol && !isAllReceived;
+                    const isISBNCol = col === 'ISBN';
 
                     return (
                       <td 
@@ -127,6 +152,7 @@ export default function BookList({ books, onEditBook }) {
                         style={{
                           ...(col === '題名' ? { minWidth: '200px', maxWidth: '400px', whiteSpace: 'normal', wordBreak: 'break-word' } : {}),
                           ...(isBarcodeCol ? { minWidth: '170px' } : {}),
+                          ...(isISBNCol ? { minWidth: '140px' } : {}),
                           verticalAlign: 'top'
                         }}
                       >
@@ -147,21 +173,35 @@ export default function BookList({ books, onEditBook }) {
                             padding: '0.25rem',
                             borderRadius: '4px',
                             transition: 'background 0.2s',
-                            color: isUnscanned && allBarcodes.length <= 1 ? '#ef4444' : 'inherit'
+                            color: (receivingMode === 'barcode' && isBarcodeCol && !isAllReceived && allBarcodes.length <= 1) ||
+                                   (receivingMode === 'isbn' && isISBNCol && !isAllReceived && targetQty <= 1)
+                                     ? '#ef4444' 
+                                     : 'inherit'
                           }}
                           onFocus={(e) => e.target.style.background = 'rgba(255,255,255,0.1)'}
                           onMouseLeave={(e) => { if (document.activeElement !== e.target) e.target.style.background = 'transparent'; }}
                           onMouseEnter={(e) => { if (document.activeElement !== e.target) e.target.style.background = 'rgba(255,255,255,0.05)'; }}
                         >
-                          {isBarcodeCol && allBarcodes.length > 1 ? (
+                          {/* Barcode column custom rendering in barcode mode */}
+                          {receivingMode === 'barcode' && isBarcodeCol && allBarcodes.length > 1 ? (
                             allBarcodes.map((bCode, bIdx) => {
-                              const isBScanned = scanned.includes(bCode);
+                              const isBScanned = scannedBarcodes.includes(bCode);
                               return (
                                 <div key={bIdx} style={{ color: isBScanned ? '#10b981' : '#ef4444', fontWeight: isBScanned ? 400 : 600 }}>
                                   {isBScanned ? `✓ ${bCode}` : `✗ ${bCode} (未點)`}
                                 </div>
                               );
                             })
+                          ) : receivingMode === 'isbn' && isISBNCol ? (
+                            /* ISBN column custom rendering in ISBN mode */
+                            <div style={{ color: isAllReceived ? '#10b981' : isPartialReceived ? '#f59e0b' : '#ef4444', fontWeight: isAllReceived ? 400 : 600 }}>
+                              {isAllReceived ? `✓ ${book[col]}` : `✗ ${book[col]}`}
+                              {targetQty > 1 && (
+                                <span style={{ fontSize: '0.85em', marginLeft: '4px', opacity: 0.9 }}>
+                                  ({scannedISBNCount}/{targetQty}冊)
+                                </span>
+                              )}
+                            </div>
                           ) : (
                             book[col] || ''
                           )}
