@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { UploadCloud, Barcode, Hash } from 'lucide-react';
 
-export default function FileUpload({ onFileUpload, receivingMode, onModeChange }) {
+export default function FileUpload({ onFileUpload, receivingMode, onModeChange, onCancel }) {
   const [dragActive, setDragActive] = useState(false);
 
   const handleDrag = (e) => {
@@ -31,10 +31,31 @@ export default function FileUpload({ onFileUpload, receivingMode, onModeChange }
   };
 
   return (
-    <div className="glass-panel animate-fade-in" style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto' }}>
-      <div style={{ marginBottom: '1.5rem', textAlign: 'center' }}>
+    <div className="glass-panel animate-fade-in" style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto', position: 'relative' }}>
+      {onCancel && (
+        <button
+          type="button"
+          onClick={onCancel}
+          className="btn"
+          style={{
+            position: 'absolute',
+            top: '1.5rem',
+            left: '1.5rem',
+            padding: '0.4rem 0.8rem',
+            fontSize: '0.85rem',
+            backgroundColor: 'rgba(255, 255, 255, 0.08)',
+            color: 'var(--text-secondary)',
+            border: '1px solid var(--border-color)',
+            cursor: 'pointer'
+          }}
+        >
+          ← 返回現有批次
+        </button>
+      )}
+
+      <div style={{ marginBottom: '1.5rem', textAlign: 'center', marginTop: onCancel ? '1.5rem' : '0' }}>
         <h3 style={{ marginBottom: '0.75rem', fontSize: '1.1rem', color: 'var(--text-primary)' }}>
-          步驟 1：請選擇本次點收方式
+          步驟 1：請選擇此批次的點收方式
         </h3>
         <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem' }}>
           <button
@@ -98,7 +119,7 @@ export default function FileUpload({ onFileUpload, receivingMode, onModeChange }
 
       <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
         <h3 style={{ fontSize: '1.1rem', color: 'var(--text-primary)', margin: 0 }}>
-          步驟 2：上傳交書清單 Excel（支援單檔或多檔合併）
+          步驟 2：上傳該批次交書清單 Excel
         </h3>
       </div>
 

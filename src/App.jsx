@@ -4,6 +4,7 @@ import FileUpload from './components/FileUpload';
 import ScannerInput from './components/ScannerInput';
 import BookList from './components/BookList';
 import Statistics from './components/Statistics';
+import BatchTabs from './components/BatchTabs';
 
 const normalizeISBN = (str) => {
   if (!str) return '';
@@ -11,84 +12,87 @@ const normalizeISBN = (str) => {
 };
 
 function App() {
-  const [receivingMode, setReceivingMode] = useState(() => {
+  // Batches state initialized from localStorage
+  const [batches, setBatches] = useState(() => {
     try {
-      return localStorage.getItem('bookReceivingMode') || 'barcode';
+      const savedBatches = localStorage.getItem('bookReceivingBatches');
+      if (savedBatches) {
+        const parsed = JSON.parse(savedBatches);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+      // Migrate from old single-batch format if present
+      const savedBooks = localStorage.getItem('bookReceivingBooks');
+      const savedFileName = localStorage.getItem('bookReceivingFileName') || '第 1 批書單';
+      const savedMode = localStorage.getItem('bookReceivingMode') || 'barcode';
+      if (savedBooks) {
+        const parsed = JSON.parse(savedBooks);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return [{
+            id: 'batch-' + Date.now(),
+            name: savedFileName.replace(/\.[^/.]+$/, ''),
+            fileName: savedFileName,
+            receivingMode: savedMode,
+            books: parsed,
+            createdAt: Date.now()
+          }];
+        }
+      }
+      return [];
     } catch (e) {
-      return 'barcode';
-    }
-  });
-
-  // Initialize state from localStorage if available
-  const [books, setBooks] = useState(() => {
-    try {
-      const saved = localStorage.getItem('bookReceivingBooks');
-      if (!saved) return [];
-      const parsed = JSON.parse(saved);
-      return parsed.map(b => {
-        const barcodes = b._searchableBarcodes || [];
-        const rawISBN = String(b['ISBN'] || '').trim();
-        const isbnList = b._searchableISBNs || (rawISBN ? [normalizeISBN(rawISBN)].filter(Boolean) : []);
-        const qty = b._targetQuantity || parseInt(String(b['數量'] || b['冊數'] || '1').trim(), 10) || Math.max(barcodes.length, 1);
-
-        return {
-          ...b,
-          _searchableBarcodes: barcodes,
-          _scannedBarcodes: b._scannedBarcodes || (b.isReceived ? barcodes : []),
-          _searchableISBNs: isbnList,
-          _scannedISBNCount: b._scannedISBNCount ?? (b.isReceived ? qty : 0),
-          _targetQuantity: qty
-        };
-      });
-    } catch (e) {
-      console.warn(e);
+      console.warn('Failed to load batches from localStorage:', e);
       return [];
     }
   });
-  
-  const [originalFileName, setOriginalFileName] = useState(() => {
-    return localStorage.getItem('bookReceivingFileName') || '';
+
+  const [activeBatchId, setActiveBatchId] = useState(() => {
+    try {
+      return localStorage.getItem('bookReceivingActiveBatchId') || '';
+    } catch (e) {
+      return '';
+    }
   });
-  
+
+  const [isAddingBatch, setIsAddingBatch] = useState(false);
+  const [newBatchMode, setNewBatchMode] = useState('barcode');
   const [successPulse, setSuccessPulse] = useState(false);
 
-  // Auto-save whenever books, mode, or file name changes
+  // Synchronize activeBatchId when batches change
+  useEffect(() => {
+    if (batches.length === 0) {
+      setActiveBatchId('');
+      return;
+    }
+    const exists = batches.some(b => b.id === activeBatchId);
+    if (!exists) {
+      setActiveBatchId(batches[0].id);
+    }
+  }, [batches, activeBatchId]);
+
+  // Persist batches & activeBatchId to localStorage
   useEffect(() => {
     try {
-      localStorage.setItem('bookReceivingMode', receivingMode);
+      localStorage.setItem('bookReceivingBatches', JSON.stringify(batches));
     } catch (e) {
-      console.warn('localStorage save failed:', e);
+      console.warn('localStorage save batches failed:', e);
     }
-  }, [receivingMode]);
+  }, [batches]);
 
   useEffect(() => {
     try {
-      localStorage.setItem('bookReceivingBooks', JSON.stringify(books));
+      localStorage.setItem('bookReceivingActiveBatchId', activeBatchId);
     } catch (e) {
-      console.warn('localStorage save failed:', e);
+      console.warn('localStorage save activeBatchId failed:', e);
     }
-  }, [books]);
+  }, [activeBatchId]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('bookReceivingFileName', originalFileName);
-    } catch (e) {
-      console.warn('localStorage save failed:', e);
-    }
-  }, [originalFileName]);
-
-  const handleClearData = () => {
-    if (window.confirm('確定要放棄目前的點收進度，並重新上傳清單嗎？')) {
-      setBooks([]);
-      setOriginalFileName('');
-      try {
-        localStorage.removeItem('bookReceivingBooks');
-        localStorage.removeItem('bookReceivingFileName');
-      } catch (e) {
-        console.warn('localStorage remove failed:', e);
-      }
-    }
-  };
+  // Current active batch helper
+  const activeBatch = batches.find(b => b.id === activeBatchId) || batches[0] || null;
+  const currentBooks = activeBatch?.books || [];
+  const currentMode = activeBatch?.receivingMode || 'barcode';
+  const totalBooks = currentBooks.length;
+  const receivedBooks = currentBooks.filter(book => book.isReceived).length;
 
   const handleFileUpload = async (fileOrFiles) => {
     try {
@@ -98,14 +102,7 @@ function App() {
 
       if (!fileList || fileList.length === 0) return;
 
-      const isMulti = fileList.length > 1;
-      const combinedNames = isMulti
-        ? `多批次合併_${fileList.map(f => f.name.replace(/\.[^/.]+$/, "")).join('_')}`
-        : fileList[0].name.replace(/\.[^/.]+$/, "");
-
-      setOriginalFileName(combinedNames);
-
-      const allInitializedData = [];
+      const newBatches = [];
 
       for (const file of fileList) {
         const batchName = file.name.replace(/\.[^/.]+$/, "");
@@ -133,14 +130,11 @@ function App() {
         const headers = rawData[headerRowIndex].map(h => String(h).replace(/\s+/g, ' ').trim());
         const dataRows = rawData.slice(headerRowIndex + 1);
 
+        const initializedData = [];
         dataRows.forEach(row => {
           if (!row.some(cell => cell !== '')) return; // Skip completely empty rows
 
           let rowObj = {};
-          if (isMulti) {
-            rowObj['來源批次'] = batchName;
-          }
-
           headers.forEach((header, index) => {
             if (header) {
               rowObj[header] = row[index];
@@ -149,10 +143,7 @@ function App() {
 
           const title = String(rowObj['題名'] || '').trim();
           const isbn = String(rowObj['ISBN'] || '').trim();
-
-          if (!title && !isbn) {
-            return;
-          }
+          if (!title && !isbn) return;
 
           const rawBarcode = String(rowObj['登錄號'] || '').trim();
           const barcodes = rawBarcode.split(/\s+/).filter(b => b);
@@ -163,7 +154,7 @@ function App() {
           const parsedQty = parseInt(String(rowObj['數量'] || rowObj['冊數'] || '1').trim(), 10) || 1;
           const targetQty = Math.max(parsedQty, barcodes.length, 1);
 
-          allInitializedData.push({
+          initializedData.push({
             ...rowObj,
             '登錄號': rawBarcode,
             _searchableBarcodes: barcodes,
@@ -175,14 +166,27 @@ function App() {
             _original: { ...rowObj, '登錄號': rawBarcode }
           });
         });
+
+        if (initializedData.length > 0) {
+          newBatches.push({
+            id: 'batch-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
+            name: batchName,
+            fileName: file.name,
+            receivingMode: newBatchMode,
+            books: initializedData,
+            createdAt: Date.now()
+          });
+        }
       }
 
-      if (allInitializedData.length === 0) {
+      if (newBatches.length === 0) {
         alert('上傳的 Excel 檔案中沒有讀取到任何書籍資料！');
         return;
       }
 
-      setBooks(allInitializedData);
+      setBatches(prev => [...prev, ...newBatches]);
+      setActiveBatchId(newBatches[0].id);
+      setIsAddingBatch(false);
     } catch (err) {
       console.error('檔案處理失敗:', err);
       alert('檔案解析處理失敗：' + err.message);
@@ -190,119 +194,139 @@ function App() {
   };
 
   const handleScan = (inputVal) => {
-    let found = false;
     const cleanInput = String(inputVal).trim();
-    if (!cleanInput) return;
-    
-    setBooks(prevBooks => {
-      const newBooks = [...prevBooks];
-      
-      if (receivingMode === 'barcode') {
-        // --- 條碼（登錄號）點收模式 ---
-        const bookIndex = newBooks.findIndex(book => 
-          book._searchableBarcodes && book._searchableBarcodes.includes(cleanInput)
-        );
-        
-        if (bookIndex !== -1) {
-          found = true;
-          const targetBook = newBooks[bookIndex];
-          const allBarcodes = targetBook._searchableBarcodes || [];
-          const prevScanned = targetBook._scannedBarcodes || [];
-          const nextScanned = prevScanned.includes(cleanInput) ? prevScanned : [...prevScanned, cleanInput];
-          const isAllReceived = allBarcodes.length > 0 && allBarcodes.every(b => nextScanned.includes(b));
+    if (!cleanInput || !activeBatch) return;
 
-          newBooks[bookIndex] = {
-            ...targetBook,
-            _scannedBarcodes: nextScanned,
-            isReceived: isAllReceived
-          };
-          
-          const scannedBook = newBooks.splice(bookIndex, 1)[0];
-          newBooks.unshift(scannedBook);
-          
-          setSuccessPulse(true);
-          setTimeout(() => setSuccessPulse(false), 1500);
-        }
-      } else {
-        // --- ISBN 點收模式 ---
-        const scannedCleanISBN = normalizeISBN(cleanInput);
-        
-        // 尋找符合該 ISBN 且尚未點滿數量的書目
-        let bookIndex = newBooks.findIndex(book => {
-          const isMatch = book._searchableISBNs && book._searchableISBNs.some(isbn => {
-            if (!isbn || !scannedCleanISBN) return false;
-            return isbn === scannedCleanISBN || scannedCleanISBN.includes(isbn) || isbn.includes(scannedCleanISBN);
-          });
-          const targetQty = book._targetQuantity || 1;
-          const currentCount = book._scannedISBNCount || 0;
-          return isMatch && currentCount < targetQty;
-        });
+    let foundInActive = false;
+    const mode = activeBatch.receivingMode;
 
-        // 若該 ISBN 都已點收滿額，再次掃描時提示
-        if (bookIndex === -1) {
-          const alreadyFullIndex = newBooks.findIndex(book => 
-            book._searchableISBNs && book._searchableISBNs.some(isbn => {
+    // 1. Try matching in the currently active batch
+    setBatches(prevBatches => {
+      return prevBatches.map(batch => {
+        if (batch.id !== activeBatch.id) return batch;
+
+        const newBooks = [...batch.books];
+        if (mode === 'barcode') {
+          const bookIndex = newBooks.findIndex(book =>
+            book._searchableBarcodes && book._searchableBarcodes.includes(cleanInput)
+          );
+          if (bookIndex !== -1) {
+            foundInActive = true;
+            const targetBook = newBooks[bookIndex];
+            const allBarcodes = targetBook._searchableBarcodes || [];
+            const prevScanned = targetBook._scannedBarcodes || [];
+            const nextScanned = prevScanned.includes(cleanInput) ? prevScanned : [...prevScanned, cleanInput];
+            const isAllReceived = allBarcodes.length > 0 && allBarcodes.every(b => nextScanned.includes(b));
+
+            newBooks[bookIndex] = {
+              ...targetBook,
+              _scannedBarcodes: nextScanned,
+              isReceived: isAllReceived
+            };
+            const scannedBook = newBooks.splice(bookIndex, 1)[0];
+            newBooks.unshift(scannedBook);
+            setSuccessPulse(true);
+            setTimeout(() => setSuccessPulse(false), 1500);
+          }
+        } else {
+          // ISBN mode
+          const scannedCleanISBN = normalizeISBN(cleanInput);
+          let bookIndex = newBooks.findIndex(book => {
+            const isMatch = book._searchableISBNs && book._searchableISBNs.some(isbn => {
               if (!isbn || !scannedCleanISBN) return false;
               return isbn === scannedCleanISBN || scannedCleanISBN.includes(isbn) || isbn.includes(scannedCleanISBN);
-            })
-          );
-          if (alreadyFullIndex !== -1) {
-            found = true;
-            alert(`⚠️ ISBN: ${cleanInput} 的書籍（共 ${newBooks[alreadyFullIndex]._targetQuantity || 1} 冊）已全數點收完成！`);
-            return prevBooks;
+            });
+            const targetQty = book._targetQuantity || 1;
+            const currentCount = book._scannedISBNCount || 0;
+            return isMatch && currentCount < targetQty;
+          });
+
+          if (bookIndex === -1) {
+            const alreadyFull = newBooks.findIndex(book =>
+              book._searchableISBNs && book._searchableISBNs.some(isbn =>
+                isbn === scannedCleanISBN || scannedCleanISBN.includes(isbn) || isbn.includes(scannedCleanISBN)
+              )
+            );
+            if (alreadyFull !== -1) {
+              foundInActive = true;
+              alert(`⚠️ ISBN: ${cleanInput} 的書籍已全數點收完成！`);
+              return batch;
+            }
+          }
+
+          if (bookIndex !== -1) {
+            foundInActive = true;
+            const targetBook = newBooks[bookIndex];
+            const targetQty = targetBook._targetQuantity || 1;
+            const nextCount = (targetBook._scannedISBNCount || 0) + 1;
+            const isAllReceived = nextCount >= targetQty;
+
+            newBooks[bookIndex] = {
+              ...targetBook,
+              _scannedISBNCount: nextCount,
+              isReceived: isAllReceived
+            };
+            const scannedBook = newBooks.splice(bookIndex, 1)[0];
+            newBooks.unshift(scannedBook);
+            setSuccessPulse(true);
+            setTimeout(() => setSuccessPulse(false), 1500);
           }
         }
 
-        if (bookIndex !== -1) {
-          found = true;
-          const targetBook = newBooks[bookIndex];
-          const targetQty = targetBook._targetQuantity || 1;
-          const nextCount = (targetBook._scannedISBNCount || 0) + 1;
-          const isAllReceived = nextCount >= targetQty;
-
-          newBooks[bookIndex] = {
-            ...targetBook,
-            _scannedISBNCount: nextCount,
-            isReceived: isAllReceived
-          };
-
-          const scannedBook = newBooks.splice(bookIndex, 1)[0];
-          newBooks.unshift(scannedBook);
-
-          setSuccessPulse(true);
-          setTimeout(() => setSuccessPulse(false), 1500);
-        }
-      }
-      
-      return newBooks;
+        return { ...batch, books: newBooks };
+      });
     });
 
-    if (!found) {
-      if (receivingMode === 'barcode') {
-        alert(`找不到登錄號條碼: ${cleanInput}`);
+    if (foundInActive) return;
+
+    // 2. Check if the book exists in ANOTHER batch
+    const otherBatch = batches.find(b => {
+      if (b.id === activeBatch.id) return false;
+      if (b.receivingMode === 'barcode') {
+        return b.books.some(book => book._searchableBarcodes && book._searchableBarcodes.includes(cleanInput));
       } else {
-        alert(`找不到 ISBN: ${cleanInput}`);
+        const scannedCleanISBN = normalizeISBN(cleanInput);
+        return b.books.some(book =>
+          book._searchableISBNs && book._searchableISBNs.some(isbn =>
+            isbn === scannedCleanISBN || scannedCleanISBN.includes(isbn) || isbn.includes(scannedCleanISBN)
+          )
+        );
       }
+    });
+
+    if (otherBatch) {
+      if (window.confirm(`💡 提示：在批次「${otherBatch.name}」中找到此書籍！\n是否立即切換至「${otherBatch.name}」進行點收？`)) {
+        setActiveBatchId(otherBatch.id);
+        setTimeout(() => {
+          handleScan(cleanInput);
+        }, 150);
+      }
+      return;
+    }
+
+    // 3. Not found in any batch
+    if (mode === 'barcode') {
+      alert(`找不到登錄號條碼: ${cleanInput}`);
+    } else {
+      alert(`找不到 ISBN: ${cleanInput}`);
     }
   };
 
   const handleExport = () => {
-    if (books.length === 0) return;
+    if (!activeBatch || currentBooks.length === 0) return;
 
     // Prepare data for export
-    const exportData = books.map(book => {
+    const exportData = currentBooks.map(book => {
       const { isReceived, _searchableBarcodes, _scannedBarcodes, _searchableISBNs, _scannedISBNCount, _targetQuantity, _original, ...rest } = book;
       
-      // Remove unwanted columns for export
       delete rest['箱號'];
       delete rest['紙插序號'];
 
-      // Replace any whitespace (newlines, spaces) in barcodes with "、"
       let exportBarcode = String(rest['登錄號'] || '').trim();
       exportBarcode = exportBarcode.replace(/\s+/g, '、');
 
       let statusText = '未到館';
-      if (receivingMode === 'barcode') {
+      if (currentMode === 'barcode') {
         const allBarcodes = _searchableBarcodes || [];
         const scanned = _scannedBarcodes || [];
         const missingBarcodes = allBarcodes.filter(b => !scanned.includes(b));
@@ -314,7 +338,6 @@ function App() {
           statusText = `部分到館 (缺: ${missingBarcodes.join('、')})`;
         }
       } else {
-        // ISBN 模式
         const targetQty = _targetQuantity || 1;
         const currentCount = _scannedISBNCount || 0;
         if (currentCount >= targetQty && targetQty > 0) {
@@ -335,7 +358,6 @@ function App() {
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
 
-    // Apply formatting to cells
     const range = XLSX.utils.decode_range(worksheet['!ref']);
     const headers = [];
     for(let C = range.s.c; C <= range.e.c; ++C) {
@@ -343,9 +365,7 @@ function App() {
       if (cell) headers[C] = cell.v;
     }
 
-    // Set specific column widths to fit A4 landscape (tightly packed)
     const headerWidths = {
-      '來源批次': 10,
       '序號': 4,
       'ISBN': 13,
       '登錄號': 16,
@@ -371,7 +391,6 @@ function App() {
     };
     worksheet['!cols'] = headers.map(h => ({ wch: headerWidths[h] || 8 }));
 
-    // Setup page for A4 landscape printing, fitting to 1 page wide
     worksheet['!pageSetup'] = { paperSize: 9, orientation: 'landscape', fitToWidth: 1, fitToHeight: 0 };
     worksheet['!fitToPage'] = true;
     worksheet['!margins'] = { left: 0.1, right: 0.1, top: 0.3, bottom: 0.3, header: 0.1, footer: 0.1 };
@@ -384,8 +403,8 @@ function App() {
     };
 
     for(let R = range.s.r; R <= range.e.r; ++R) {
-      const originalBook = R > 0 ? (books[R - 1]?._original || {}) : {};
-      const currentBook = R > 0 ? books[R - 1] : null;
+      const originalBook = R > 0 ? (currentBooks[R - 1]?._original || {}) : {};
+      const currentBook = R > 0 ? currentBooks[R - 1] : null;
       
       for(let C = range.s.c; C <= range.e.c; ++C) {
         const colName = headers[C];
@@ -394,14 +413,12 @@ function App() {
         
         if (!cell) continue;
 
-        // Force ISBN and 登錄號 to string to prevent scientific notation in Excel
         if (colName === 'ISBN' || colName === '登錄號') {
            cell.t = 's';
            cell.v = String(cell.v);
            cell.z = '@';
         }
 
-        // Apply base styles: font size 8, wrap text, vertical top alignment, and full borders
         if (!cell.s) cell.s = {};
         cell.s.border = borderThin;
 
@@ -414,18 +431,15 @@ function App() {
            cell.s.alignment.vertical = 'top';
         }
 
-        // Style header row
         if (R === 0) {
           cell.s.font.bold = true;
           cell.s.fill = { fgColor: { rgb: 'F2F2F2' } };
         }
 
-        // Highlight modified cells in red (skip header row)
         if (R > 0 && originalBook[colName] !== undefined) {
            let originalValue = String(originalBook[colName]).trim();
            let currentValue = String(cell.v).trim();
            
-           // Normalize 登錄號 for comparison because we injected '、'
            if (colName === '登錄號') {
              originalValue = originalValue.replace(/\s+/g, '、');
            }
@@ -435,15 +449,13 @@ function App() {
            }
         }
 
-        // Highlight '未到館' or '部分到館' in red
         if (R > 0 && colName === '點收狀態') {
            if (cell.v === '未到館' || String(cell.v).startsWith('部分到館')) {
              cell.s.font.color = { rgb: "FF0000" };
            }
         }
 
-        // Barcode mode: Highlight unreceived or partially received barcode ('登錄號') in red
-        if (R > 0 && receivingMode === 'barcode' && colName === '登錄號' && currentBook) {
+        if (R > 0 && currentMode === 'barcode' && colName === '登錄號' && currentBook) {
            const allBarcodes = currentBook._searchableBarcodes || [];
            const scanned = currentBook._scannedBarcodes || [];
            const isAllReceived = allBarcodes.length > 0 && allBarcodes.every(b => scanned.includes(b));
@@ -452,8 +464,7 @@ function App() {
            }
         }
 
-        // ISBN mode: Highlight unreceived or partially received ISBN in red
-        if (R > 0 && receivingMode === 'isbn' && colName === 'ISBN' && currentBook) {
+        if (R > 0 && currentMode === 'isbn' && colName === 'ISBN' && currentBook) {
            const targetQty = currentBook._targetQuantity || 1;
            const currentCount = currentBook._scannedISBNCount || 0;
            if (currentCount < targetQty) {
@@ -464,11 +475,9 @@ function App() {
     }
 
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, '點收結果');
+    XLSX.utils.book_append_sheet(workbook, worksheet, activeBatch.name || '點收結果');
 
-    const outFileName = originalFileName 
-      ? originalFileName.replace(/\.[^/.]+$/, "") + '_點收結果.xlsx' 
-      : '圖書點收結果.xlsx';
+    const outFileName = `${activeBatch.name || '圖書點收'}_點收結果.xlsx`;
 
     XLSX.writeFile(workbook, outFileName);
 
@@ -510,78 +519,123 @@ function App() {
   };
 
   const handleEditBook = (index, key, newValue) => {
-    setBooks(prevBooks => {
-      const newBooks = [...prevBooks];
-      newBooks[index] = { ...newBooks[index], [key]: newValue };
-      
-      // If they edited the barcode, we must update the searchable array too
-      if (key === '登錄號') {
-         const newBarcodes = String(newValue).trim().split(/\s+/).filter(b => b);
-         newBooks[index]._searchableBarcodes = newBarcodes;
-         const currentScanned = newBooks[index]._scannedBarcodes || [];
-         const filteredScanned = currentScanned.filter(b => newBarcodes.includes(b));
-         newBooks[index]._scannedBarcodes = filteredScanned;
-         if (receivingMode === 'barcode') {
-           newBooks[index].isReceived = newBarcodes.length > 0 && newBarcodes.every(b => filteredScanned.includes(b));
-         }
-      }
+    if (!activeBatchId) return;
 
-      // If they edited ISBN
-      if (key === 'ISBN') {
-        const rawISBN = String(newValue).trim();
-        const normalized = normalizeISBN(rawISBN);
-        const isbnList = rawISBN.split(/[\s,;、\n\r]+/).map(normalizeISBN).filter(Boolean);
-        newBooks[index]._searchableISBNs = isbnList.length > 0 ? isbnList : (normalized ? [normalized] : []);
-      }
+    setBatches(prevBatches => {
+      return prevBatches.map(batch => {
+        if (batch.id !== activeBatchId) return batch;
 
-      // If they edited quantity
-      if (key === '數量' || key === '冊數') {
-        const parsed = parseInt(String(newValue).trim(), 10) || 1;
-        newBooks[index]._targetQuantity = Math.max(parsed, (newBooks[index]._searchableBarcodes || []).length, 1);
-        if (receivingMode === 'isbn') {
-          newBooks[index].isReceived = (newBooks[index]._scannedISBNCount || 0) >= newBooks[index]._targetQuantity;
+        const newBooks = [...batch.books];
+        newBooks[index] = { ...newBooks[index], [key]: newValue };
+        
+        if (key === '登錄號') {
+           const newBarcodes = String(newValue).trim().split(/\s+/).filter(b => b);
+           newBooks[index]._searchableBarcodes = newBarcodes;
+           const currentScanned = newBooks[index]._scannedBarcodes || [];
+           const filteredScanned = currentScanned.filter(b => newBarcodes.includes(b));
+           newBooks[index]._scannedBarcodes = filteredScanned;
+           if (batch.receivingMode === 'barcode') {
+             newBooks[index].isReceived = newBarcodes.length > 0 && newBarcodes.every(b => filteredScanned.includes(b));
+           }
         }
-      }
 
-      return newBooks;
+        if (key === 'ISBN') {
+          const rawISBN = String(newValue).trim();
+          const normalized = normalizeISBN(rawISBN);
+          const isbnList = rawISBN.split(/[\s,;、\n\r]+/).map(normalizeISBN).filter(Boolean);
+          newBooks[index]._searchableISBNs = isbnList.length > 0 ? isbnList : (normalized ? [normalized] : []);
+        }
+
+        if (key === '數量' || key === '冊數') {
+          const parsed = parseInt(String(newValue).trim(), 10) || 1;
+          newBooks[index]._targetQuantity = Math.max(parsed, (newBooks[index]._searchableBarcodes || []).length, 1);
+          if (batch.receivingMode === 'isbn') {
+            newBooks[index].isReceived = (newBooks[index]._scannedISBNCount || 0) >= newBooks[index]._targetQuantity;
+          }
+        }
+
+        return { ...batch, books: newBooks };
+      });
     });
   };
 
-  const totalBooks = books.length;
-  const receivedBooks = books.filter(book => book.isReceived).length;
+  const handleCloseBatch = (batchId) => {
+    const target = batches.find(b => b.id === batchId);
+    if (!target) return;
+    if (window.confirm(`確定要關閉批次「${target.name}」嗎？該批次的點收資料將被清除。`)) {
+      setBatches(prev => prev.filter(b => b.id !== batchId));
+    }
+  };
+
+  const handleClearAll = () => {
+    if (window.confirm('確定要清空所有批次的點收資料嗎？')) {
+      setBatches([]);
+      setActiveBatchId('');
+      try {
+        localStorage.removeItem('bookReceivingBatches');
+        localStorage.removeItem('bookReceivingActiveBatchId');
+        localStorage.removeItem('bookReceivingBooks');
+        localStorage.removeItem('bookReceivingFileName');
+      } catch (e) {
+        console.warn(e);
+      }
+    }
+  };
+
+  const handleModeChange = (newMode) => {
+    if (isAddingBatch || batches.length === 0) {
+      setNewBatchMode(newMode);
+      return;
+    }
+    setBatches(prev => prev.map(b => b.id === activeBatchId ? { ...b, receivingMode: newMode } : b));
+  };
 
   return (
     <div className="container">
       <header className="header">
         <h1>圖書點收系統</h1>
-        <p>上傳清單並使用條碼機快速核對到館狀態（支援條碼點收與 ISBN 點收）</p>
+        <p>上傳清單並使用條碼機快速核對到館狀態（支援多批次分頁、條碼點收與 ISBN 點收）</p>
       </header>
 
       <main>
-        {books.length === 0 ? (
+        {batches.length === 0 || isAddingBatch ? (
           <FileUpload 
             onFileUpload={handleFileUpload} 
-            receivingMode={receivingMode} 
-            onModeChange={setReceivingMode} 
+            receivingMode={newBatchMode} 
+            onModeChange={setNewBatchMode} 
+            onCancel={batches.length > 0 ? () => setIsAddingBatch(false) : null}
           />
         ) : (
           <div className="animate-fade-in">
+            <BatchTabs 
+              batches={batches}
+              activeBatchId={activeBatchId}
+              onSelectBatch={setActiveBatchId}
+              onCloseBatch={handleCloseBatch}
+              onAddNewBatch={() => {
+                setNewBatchMode(currentMode);
+                setIsAddingBatch(true);
+              }}
+            />
+
             <ScannerInput 
               onScan={handleScan} 
               successPulse={successPulse} 
-              receivingMode={receivingMode}
-              onModeChange={setReceivingMode}
+              receivingMode={currentMode}
+              onModeChange={handleModeChange}
             />
+
             <Statistics 
               total={totalBooks} 
               received={receivedBooks} 
               onExport={handleExport} 
-              onClear={handleClearData}
+              onClear={handleClearAll}
             />
+
             <BookList 
-              books={books} 
+              books={currentBooks} 
               onEditBook={handleEditBook} 
-              receivingMode={receivingMode}
+              receivingMode={currentMode}
             />
           </div>
         )}
