@@ -52,6 +52,13 @@ export default function BookList({ books, onEditBook, receivingMode = 'barcode' 
     return !excludedKeywords.some(kw => key.includes(kw));
   });
 
+  // Move '來源批次' to the front if present
+  const batchIndex = columns.indexOf('來源批次');
+  if (batchIndex !== -1) {
+    columns.splice(batchIndex, 1);
+    columns.unshift('來源批次');
+  }
+
   // Move '置放地點' right after '出版年'
   const locationIndex = columns.indexOf('置放地點');
   if (locationIndex !== -1) {

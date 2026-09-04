@@ -18,15 +18,15 @@ export default function FileUpload({ onFileUpload, receivingMode, onModeChange }
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      onFileUpload(e.dataTransfer.files[0]);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      onFileUpload(Array.from(e.dataTransfer.files));
     }
   };
 
   const handleChange = (e) => {
     e.preventDefault();
-    if (e.target.files && e.target.files[0]) {
-      onFileUpload(e.target.files[0]);
+    if (e.target.files && e.target.files.length > 0) {
+      onFileUpload(Array.from(e.target.files));
     }
   };
 
@@ -98,7 +98,7 @@ export default function FileUpload({ onFileUpload, receivingMode, onModeChange }
 
       <div style={{ textAlign: 'center', marginBottom: '0.5rem' }}>
         <h3 style={{ fontSize: '1.1rem', color: 'var(--text-primary)', margin: 0 }}>
-          步驟 2：上傳交書清單 Excel
+          步驟 2：上傳交書清單 Excel（支援單檔或多檔合併）
         </h3>
       </div>
 
@@ -113,6 +113,7 @@ export default function FileUpload({ onFileUpload, receivingMode, onModeChange }
         <input 
           id="file-upload" 
           type="file" 
+          multiple
           accept=".xlsx, .xls, .csv" 
           style={{ display: 'none' }} 
           onChange={handleChange} 
@@ -120,7 +121,7 @@ export default function FileUpload({ onFileUpload, receivingMode, onModeChange }
         <UploadCloud size={56} className="upload-icon" />
         <h2 style={{ marginBottom: '0.5rem', fontSize: '1.4rem' }}>上傳圖書清單</h2>
         <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
-          拖曳 Excel 檔案至此，或點擊選擇檔案 (.xlsx)
+          拖曳一個或多個 Excel 檔案至此，或點擊選擇檔案 (.xlsx)
         </p>
       </div>
     </div>

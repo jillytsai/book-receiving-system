@@ -90,98 +90,102 @@ function App() {
     }
   };
 
-  const handleFileUpload = (file) => {
+  const handleFileUpload = async (fileOrFiles) => {
     try {
-      setOriginalFileName(file.name);
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const data = new Uint8Array(e.target.result);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-          
-          // Read as 2D array to find the correct header row
-          const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-          
-          // Find the header row (the one containing '登錄號' or 'ISBN')
-          let headerRowIndex = -1;
-          for (let i = 0; i < Math.min(20, rawData.length); i++) {
-            if (rawData[i].some(cell => String(cell).includes('登錄號') || String(cell).includes('ISBN'))) {
-              headerRowIndex = i;
-              break;
-            }
+      const fileList = Array.isArray(fileOrFiles)
+        ? fileOrFiles
+        : (fileOrFiles instanceof FileList ? Array.from(fileOrFiles) : [fileOrFiles]);
+
+      if (!fileList || fileList.length === 0) return;
+
+      const isMulti = fileList.length > 1;
+      const combinedNames = isMulti
+        ? `多批次合併_${fileList.map(f => f.name.replace(/\.[^/.]+$/, "")).join('_')}`
+        : fileList[0].name.replace(/\.[^/.]+$/, "");
+
+      setOriginalFileName(combinedNames);
+
+      const allInitializedData = [];
+
+      for (const file of fileList) {
+        const batchName = file.name.replace(/\.[^/.]+$/, "");
+        const arrayBuffer = await file.arrayBuffer();
+        const data = new Uint8Array(arrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+
+        const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+
+        let headerRowIndex = -1;
+        for (let i = 0; i < Math.min(20, rawData.length); i++) {
+          if (rawData[i].some(cell => String(cell).includes('登錄號') || String(cell).includes('ISBN'))) {
+            headerRowIndex = i;
+            break;
+          }
+        }
+
+        if (headerRowIndex === -1) {
+          alert(`檔案「${file.name}」在前 20 列中找不到「登錄號」或「ISBN」欄位，已跳過該檔案！`);
+          continue;
+        }
+
+        const headers = rawData[headerRowIndex].map(h => String(h).replace(/\s+/g, ' ').trim());
+        const dataRows = rawData.slice(headerRowIndex + 1);
+
+        dataRows.forEach(row => {
+          if (!row.some(cell => cell !== '')) return; // Skip completely empty rows
+
+          let rowObj = {};
+          if (isMulti) {
+            rowObj['來源批次'] = batchName;
           }
 
-          if (headerRowIndex === -1) {
-            alert('在 Excel 的前 20 列中找不到「登錄號」或「ISBN」欄位，請確認清單格式是否正確！');
-            return;
-          }
-
-          const headers = rawData[headerRowIndex].map(h => String(h).replace(/\s+/g, ' ').trim());
-          const dataRows = rawData.slice(headerRowIndex + 1);
-
-          // Create object array and handle multiple barcodes / ISBNs in one cell
-          const initializedData = [];
-          dataRows.forEach(row => {
-            if (!row.some(cell => cell !== '')) return; // Skip completely empty rows
-            
-            let rowObj = {};
-            headers.forEach((header, index) => {
-              if (header) {
-                rowObj[header] = row[index];
-              }
-            });
-
-            // Skip the total row at the bottom
-            const title = String(rowObj['題名'] || '').trim();
-            const isbn = String(rowObj['ISBN'] || '').trim();
-            
-            if (!title && !isbn) {
-              return;
+          headers.forEach((header, index) => {
+            if (header) {
+              rowObj[header] = row[index];
             }
-
-            const rawBarcode = String(rowObj['登錄號'] || '').trim();
-            const barcodes = rawBarcode.split(/\s+/).filter(b => b);
-
-            const rawISBN = String(rowObj['ISBN'] || '').trim();
-            const normalized = normalizeISBN(rawISBN);
-            const isbnList = rawISBN.split(/[\s,;、\n\r]+/).map(normalizeISBN).filter(Boolean);
-            const parsedQty = parseInt(String(rowObj['數量'] || rowObj['冊數'] || '1').trim(), 10) || 1;
-            const targetQty = Math.max(parsedQty, barcodes.length, 1);
-
-            initializedData.push({
-              ...rowObj,
-              '登錄號': rawBarcode,
-              _searchableBarcodes: barcodes,
-              _scannedBarcodes: [],
-              _searchableISBNs: isbnList.length > 0 ? isbnList : (normalized ? [normalized] : []),
-              _scannedISBNCount: 0,
-              _targetQuantity: targetQty,
-              isReceived: false,
-              _original: { ...rowObj, '登錄號': rawBarcode }
-            });
           });
 
-          if (initializedData.length === 0) {
-            alert('上傳的 Excel 檔案中沒有讀取到任何書籍資料！');
+          const title = String(rowObj['題名'] || '').trim();
+          const isbn = String(rowObj['ISBN'] || '').trim();
+
+          if (!title && !isbn) {
             return;
           }
 
-          setBooks(initializedData);
-        } catch (err) {
-          console.error('檔案解析失敗:', err);
-          alert('Excel 檔案解析失敗：' + err.message);
-        }
-      };
-      reader.onerror = (err) => {
-        console.error('檔案讀取失敗:', err);
-        alert('讀取檔案失敗，請重新嘗試！');
-      };
-      reader.readAsArrayBuffer(file);
+          const rawBarcode = String(rowObj['登錄號'] || '').trim();
+          const barcodes = rawBarcode.split(/\s+/).filter(b => b);
+
+          const rawISBN = String(rowObj['ISBN'] || '').trim();
+          const normalized = normalizeISBN(rawISBN);
+          const isbnList = rawISBN.split(/[\s,;、\n\r]+/).map(normalizeISBN).filter(Boolean);
+          const parsedQty = parseInt(String(rowObj['數量'] || rowObj['冊數'] || '1').trim(), 10) || 1;
+          const targetQty = Math.max(parsedQty, barcodes.length, 1);
+
+          allInitializedData.push({
+            ...rowObj,
+            '登錄號': rawBarcode,
+            _searchableBarcodes: barcodes,
+            _scannedBarcodes: [],
+            _searchableISBNs: isbnList.length > 0 ? isbnList : (normalized ? [normalized] : []),
+            _scannedISBNCount: 0,
+            _targetQuantity: targetQty,
+            isReceived: false,
+            _original: { ...rowObj, '登錄號': rawBarcode }
+          });
+        });
+      }
+
+      if (allInitializedData.length === 0) {
+        alert('上傳的 Excel 檔案中沒有讀取到任何書籍資料！');
+        return;
+      }
+
+      setBooks(allInitializedData);
     } catch (err) {
-      console.error(err);
-      alert('上傳失敗：' + err.message);
+      console.error('檔案處理失敗:', err);
+      alert('檔案解析處理失敗：' + err.message);
     }
   };
 
@@ -341,6 +345,7 @@ function App() {
 
     // Set specific column widths to fit A4 landscape (tightly packed)
     const headerWidths = {
+      '來源批次': 10,
       '序號': 4,
       'ISBN': 13,
       '登錄號': 16,
