@@ -598,21 +598,47 @@ function App() {
     const target = batches.find(b => b.id === batchId);
     if (!target) return;
     if (window.confirm(`確定要關閉批次「${target.name}」嗎？該批次的點收資料將被清除。`)) {
-      setBatches(prev => prev.filter(b => b.id !== batchId));
+      const remaining = batches.filter(b => b.id !== batchId);
+      setBatches(remaining);
+      if (activeBatchId === batchId) {
+        setActiveBatchId(remaining.length > 0 ? remaining[0].id : '');
+      }
     }
   };
 
-  const handleClearAll = () => {
-    if (window.confirm('確定要清空所有批次的點收資料嗎？')) {
-      setBatches([]);
-      setActiveBatchId('');
-      try {
-        localStorage.removeItem('bookReceivingBatches');
-        localStorage.removeItem('bookReceivingActiveBatchId');
-        localStorage.removeItem('bookReceivingBooks');
-        localStorage.removeItem('bookReceivingFileName');
-      } catch (e) {
-        console.warn(e);
+  const handleClearCurrent = () => {
+    if (isAllOverview) {
+      if (window.confirm('確定要清空「所有批次」的點收資料嗎？')) {
+        setBatches([]);
+        setActiveBatchId('');
+        try {
+          localStorage.removeItem('bookReceivingBatches');
+          localStorage.removeItem('bookReceivingActiveBatchId');
+          localStorage.removeItem('bookReceivingBooks');
+          localStorage.removeItem('bookReceivingFileName');
+        } catch (e) {
+          console.warn(e);
+        }
+      }
+    } else {
+      const target = batches.find(b => b.id === activeBatchId);
+      const name = target ? target.name : '目前批次';
+      if (window.confirm(`確定要清除目前批次「${name}」的點收資料嗎？\n（其他批次的資料將會保留）`)) {
+        const remaining = batches.filter(b => b.id !== activeBatchId);
+        setBatches(remaining);
+        if (remaining.length > 0) {
+          setActiveBatchId(remaining[0].id);
+        } else {
+          setActiveBatchId('');
+          try {
+            localStorage.removeItem('bookReceivingBatches');
+            localStorage.removeItem('bookReceivingActiveBatchId');
+            localStorage.removeItem('bookReceivingBooks');
+            localStorage.removeItem('bookReceivingFileName');
+          } catch (e) {
+            console.warn(e);
+          }
+        }
       }
     }
   };
@@ -656,133 +682,36 @@ function App() {
               }}
             />
 
-            {/* Inline Compact Panel for Adding New Batch */}
+            {/* Compact Modal Dialog for Adding New Batch */}
             {isAddingBatch && (
-              <div className="glass-panel animate-fade-in" style={{
-                marginBottom: '1rem',
-                padding: '1.25rem',
-                borderRadius: '12px',
-                border: '1.5px solid var(--accent-primary)',
-                backgroundColor: 'rgba(30, 41, 59, 0.95)',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
-                position: 'relative'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.85rem' }}>
-                  <h3 style={{ margin: 0, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'white' }}>
-                    <Plus size={18} color="var(--accent-primary)" />
-                    新增批次清單
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => setIsAddingBatch(false)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: 'var(--text-secondary)',
-                      cursor: 'pointer',
-                      padding: '4px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      borderRadius: '4px'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.color = 'white'}
-                    onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-secondary)'}
-                    title="關閉"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem', alignItems: 'center' }}>
-                  {/* Mode Select */}
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>
-                      1. 選擇此批次的點收方式：
-                    </label>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button
-                        type="button"
-                        className="btn"
-                        onClick={() => setNewBatchMode('barcode')}
-                        style={{
-                          flex: 1,
-                          padding: '0.5rem 0.75rem',
-                          fontSize: '0.85rem',
-                          fontWeight: newBatchMode === 'barcode' ? 600 : 'normal',
-                          backgroundColor: newBatchMode === 'barcode' ? 'var(--accent-primary)' : 'rgba(255,255,255,0.05)',
-                          color: 'white',
-                          border: newBatchMode === 'barcode' ? '1.5px solid var(--accent-primary)' : '1px solid var(--border-color)',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '0.35rem'
-                        }}
-                      >
-                        <Barcode size={15} />
-                        條碼（登錄號）
-                      </button>
-                      <button
-                        type="button"
-                        className="btn"
-                        onClick={() => setNewBatchMode('isbn')}
-                        style={{
-                          flex: 1,
-                          padding: '0.5rem 0.75rem',
-                          fontSize: '0.85rem',
-                          fontWeight: newBatchMode === 'isbn' ? 600 : 'normal',
-                          backgroundColor: newBatchMode === 'isbn' ? 'var(--accent-primary)' : 'rgba(255,255,255,0.05)',
-                          color: 'white',
-                          border: newBatchMode === 'isbn' ? '1.5px solid var(--accent-primary)' : '1px solid var(--border-color)',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '0.35rem'
-                        }}
-                      >
-                        <Hash size={15} />
-                        ISBN 點收
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Upload Drop Area */}
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>
-                      2. 上傳交書清單 Excel：
-                    </label>
-                    <div 
-                      className="upload-area"
-                      style={{ 
-                        padding: '0.65rem 1rem', 
-                        minHeight: 'auto', 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        justifyContent: 'center', 
-                        gap: '0.75rem',
-                        cursor: 'pointer'
-                      }}
-                      onClick={() => document.getElementById('new-batch-file-input').click()}
-                    >
-                      <input 
-                        id="new-batch-file-input" 
-                        type="file" 
-                        multiple
-                        accept=".xlsx, .xls, .csv" 
-                        style={{ display: 'none' }} 
-                        onChange={(e) => {
-                          if (e.target.files && e.target.files.length > 0) {
-                            handleFileUpload(Array.from(e.target.files));
-                          }
-                        }} 
-                      />
-                      <UploadCloud size={24} color="var(--accent-primary)" />
-                      <span style={{ fontSize: '0.88rem', color: 'var(--text-primary)' }}>
-                        點擊選擇或拖入 Excel (.xlsx) 檔案
-                      </span>
-                    </div>
-                  </div>
+              <div 
+                style={{
+                  position: 'fixed',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundColor: 'rgba(0, 0, 0, 0.65)',
+                  backdropFilter: 'blur(4px)',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  justifyContent: 'center',
+                  zIndex: 9999,
+                  padding: '1rem',
+                  paddingTop: '4rem',
+                  overflowY: 'auto'
+                }}
+                onClick={(e) => {
+                  if (e.target === e.currentTarget) setIsAddingBatch(false);
+                }}
+              >
+                <div style={{ maxWidth: '720px', width: '100%' }}>
+                  <FileUpload 
+                    onFileUpload={handleFileUpload} 
+                    receivingMode={newBatchMode} 
+                    onModeChange={setNewBatchMode} 
+                    onCancel={() => setIsAddingBatch(false)}
+                  />
                 </div>
               </div>
             )}
@@ -798,7 +727,9 @@ function App() {
               total={totalBooks} 
               received={receivedBooks} 
               onExport={handleExport} 
-              onClear={handleClearAll}
+              onClear={handleClearCurrent}
+              isAllOverview={isAllOverview}
+              batchName={activeBatch?.name}
             />
 
             <BookList 
