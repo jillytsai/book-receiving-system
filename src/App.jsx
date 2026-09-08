@@ -524,19 +524,20 @@ function App() {
           })
         });
 
-        const result = await res.json();
+        const result = await res.json().catch(() => ({}));
         if (res.ok) {
           alert(`✅ Excel 檔案已下載！\n📧 點收報告已自動發送至 ${result.sentTo || '您的 Email'}，請查收信箱！`);
         } else {
           console.warn('Email 發送提示:', result);
           if (result.error && result.error.includes('RESEND_API_KEY')) {
-            alert('✅ Excel 檔案已下載！\n（提示：尚未在 Vercel 設定 RESEND_API_KEY，設定後將可自動發送 Email 至 jilly@mail.nptu.edu.tw）');
+            alert('✅ Excel 檔案已下載！\n\n⚠️【Email 自動寄信提示】\n尚未在 Vercel 設定 RESEND_API_KEY 環境變數。\n設定完成並 Redeploy 後，即可自動發送點收報告至信箱！');
           } else {
-            alert(`✅ Excel 檔案已下載！\n（Email 發送提示：${result.error || '請確認發信設定'}）`);
+            alert(`✅ Excel 檔案已下載！\n\n⚠️【Email 發送提示】：${result.error || '發信伺服器未回應，請確認設定'}`);
           }
         }
       } catch (err) {
         console.warn('發送郵件失敗:', err);
+        alert('✅ Excel 檔案已下載！\n\n⚠️【Email 發信提示】：\n若在「本地 localhost」測試無法直接發信，請至「線上網址」測試，並確認 Vercel 已設定 RESEND_API_KEY。');
       }
     };
     sendEmailReport();
