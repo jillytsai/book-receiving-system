@@ -706,7 +706,7 @@ function App() {
                   if (e.target === e.currentTarget) setIsAddingBatch(false);
                 }}
               >
-                <div style={{ maxWidth: '720px', width: '100%' }}>
+                <div style={{ maxWidth: '940px', width: '100%' }}>
                   <FileUpload 
                     onFileUpload={handleFileUpload} 
                     receivingMode={newBatchMode} 
