@@ -235,9 +235,10 @@ export default function BookList({ books, onEditBook, receivingMode = 'barcode' 
                             suppressContentEditableWarning={true}
                             spellCheck={false}
                             onBlur={(e) => {
-                              const newValue = e.target.innerText.trim();
-                              if (newValue !== String(book[col] || '').trim()) {
-                                onEditBook(index, col, newValue);
+                              const rawValue = e.target.innerText.trim();
+                              const cleanValue = rawValue.replace(/^[✓✗Xx\s]+/, '').replace(/\s*\([^)]*\)$/, '').trim();
+                              if (cleanValue !== String(book[col] || '').trim()) {
+                                onEditBook(index, col, cleanValue);
                               }
                             }}
                             style={{
@@ -269,7 +270,7 @@ export default function BookList({ books, onEditBook, receivingMode = 'barcode' 
                             ) : receivingMode === 'isbn' && isISBNCol ? (
                               /* ISBN column custom rendering in ISBN mode */
                               <div style={{ color: isAllReceived ? '#10b981' : isPartialReceived ? '#f59e0b' : '#ef4444', fontWeight: isAllReceived ? 400 : 600 }}>
-                                {isAllReceived ? `✓ ${book[col]}` : `✗ ${book[col]}`}
+                                {isAllReceived ? `✓ ${String(book[col] || '').replace(/^[✓✗Xx\s]+/, '')}` : `✗ ${String(book[col] || '').replace(/^[✓✗Xx\s]+/, '')}`}
                                 {targetQty > 1 && (
                                   <span style={{ fontSize: '0.85em', marginLeft: '4px', opacity: 0.9 }}>
                                     ({scannedISBNCount}/{targetQty}冊)

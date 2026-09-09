@@ -345,7 +345,8 @@ function App() {
       delete rest['箱號'];
       delete rest['紙插序號'];
 
-      let exportBarcode = String(rest['登錄號'] || '').trim();
+      let exportISBN = String(rest['ISBN'] || '').replace(/^[✓✗Xx\s]+/, '').replace(/\s*\([^)]*\)$/, '').trim();
+      let exportBarcode = String(rest['登錄號'] || '').replace(/^[✓✗Xx\s]+/, '').trim();
       exportBarcode = exportBarcode.replace(/\s+/g, '、');
 
       let statusText = '未到館';
@@ -359,6 +360,8 @@ function App() {
           statusText = '已到館';
         } else if (scanned.length > 0) {
           statusText = `部分到館 (缺: ${missingBarcodes.join('、')})`;
+        } else {
+          statusText = '未到館';
         }
       } else {
         const targetQty = _targetQuantity || 1;
@@ -374,6 +377,7 @@ function App() {
 
       return {
         ...rest,
+        'ISBN': exportISBN,
         '登錄號': exportBarcode,
         '點收狀態': statusText
       };
@@ -427,9 +431,22 @@ function App() {
     };
 
     for(let R = range.s.r; R <= range.e.r; ++R) {
-      const originalBook = R > 0 ? (currentBooks[R - 1]?._original || {}) : {};
       const currentBook = R > 0 ? currentBooks[R - 1] : null;
       
+      // Check if current book is fully received
+      let isBookReceived = false;
+      if (currentBook) {
+        if (currentMode === 'barcode') {
+          const allBarcodes = currentBook._searchableBarcodes || [];
+          const scanned = currentBook._scannedBarcodes || [];
+          isBookReceived = allBarcodes.length > 0 && allBarcodes.every(b => scanned.includes(b));
+        } else {
+          const targetQty = currentBook._targetQuantity || 1;
+          const currentCount = currentBook._scannedISBNCount || 0;
+          isBookReceived = currentCount >= targetQty && targetQty > 0;
+        }
+      }
+
       for(let C = range.s.c; C <= range.e.c; ++C) {
         const colName = headers[C];
         const cellAddress = XLSX.utils.encode_cell({c: C, r: R});
@@ -457,43 +474,21 @@ function App() {
 
         if (R === 0) {
           cell.s.font.bold = true;
+          cell.s.font.color = { rgb: "000000" };
           cell.s.fill = { fgColor: { rgb: 'F2F2F2' } };
-        }
-
-        if (R > 0 && originalBook[colName] !== undefined) {
-           let originalValue = String(originalBook[colName]).trim();
-           let currentValue = String(cell.v).trim();
-           
-           if (colName === '登錄號') {
-             originalValue = originalValue.replace(/\s+/g, '、');
-           }
-
-           if (originalValue !== currentValue) {
-             cell.s.font.color = { rgb: "FF0000" };
-           }
-        }
-
-        if (R > 0 && colName === '點收狀態') {
-           if (cell.v === '未到館' || String(cell.v).startsWith('部分到館')) {
-             cell.s.font.color = { rgb: "FF0000" };
-           }
-        }
-
-        if (R > 0 && currentMode === 'barcode' && colName === '登錄號' && currentBook) {
-           const allBarcodes = currentBook._searchableBarcodes || [];
-           const scanned = currentBook._scannedBarcodes || [];
-           const isAllReceived = allBarcodes.length > 0 && allBarcodes.every(b => scanned.includes(b));
-           if (!isAllReceived) {
-             cell.s.font.color = { rgb: "FF0000" };
-           }
-        }
-
-        if (R > 0 && currentMode === 'isbn' && colName === 'ISBN' && currentBook) {
-           const targetQty = currentBook._targetQuantity || 1;
-           const currentCount = currentBook._scannedISBNCount || 0;
-           if (currentCount < targetQty) {
-             cell.s.font.color = { rgb: "FF0000" };
-           }
+        } else {
+          // Data rows
+          if (isBookReceived) {
+            // 已經點收完成：一律採用黑色顯示
+            cell.s.font.color = { rgb: "000000" };
+          } else {
+            // 未點收部分（未到館）：採用紅色顯示
+            if (colName === '點收狀態' || colName === 'ISBN' || colName === '登錄號') {
+              cell.s.font.color = { rgb: "FF0000" };
+            } else {
+              cell.s.font.color = { rgb: "000000" };
+            }
+          }
         }
       }
     }
