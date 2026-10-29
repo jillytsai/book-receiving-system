@@ -20,7 +20,23 @@ function App() {
       if (savedBatches) {
         const parsed = JSON.parse(savedBatches);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return parsed.map(batch => ({
+            ...batch,
+            books: (batch.books || []).map((book, idx) => {
+              const bookCopy = { ...book };
+              if (!bookCopy._id) {
+                bookCopy._id = 'book-' + (batch.id || 'b') + '-' + idx;
+              }
+              if (!bookCopy._original) {
+                const { _searchableBarcodes, _scannedBarcodes, _searchableISBNs, _scannedISBNCount, _targetQuantity, isReceived, _id, _modifiedFields, _batchId, 來源批次, ...rest } = bookCopy;
+                bookCopy._original = { ...rest };
+              }
+              if (!bookCopy._modifiedFields) {
+                bookCopy._modifiedFields = {};
+              }
+              return bookCopy;
+            })
+          }));
         }
       }
       // Migrate from old single-batch format if present
@@ -35,7 +51,16 @@ function App() {
             name: savedFileName.replace(/\.[^/.]+$/, ''),
             fileName: savedFileName,
             receivingMode: savedMode,
-            books: parsed,
+            books: parsed.map((book, idx) => {
+              const bookCopy = { ...book };
+              if (!bookCopy._id) bookCopy._id = 'book-legacy-' + idx;
+              if (!bookCopy._original) {
+                const { _searchableBarcodes, _scannedBarcodes, _searchableISBNs, _scannedISBNCount, _targetQuantity, isReceived, _id, _modifiedFields, _batchId, 來源批次, ...rest } = bookCopy;
+                bookCopy._original = { ...rest };
+              }
+              if (!bookCopy._modifiedFields) bookCopy._modifiedFields = {};
+              return bookCopy;
+            }),
             createdAt: Date.now()
           }];
         }
@@ -161,6 +186,7 @@ function App() {
           const targetQty = Math.max(parsedQty, barcodes.length, 1);
 
           initializedData.push({
+            _id: 'book-' + Date.now() + '-' + Math.random().toString(36).substr(2, 7),
             ...rowObj,
             '登錄號': rawBarcode,
             _searchableBarcodes: barcodes,
@@ -169,7 +195,8 @@ function App() {
             _scannedISBNCount: 0,
             _targetQuantity: targetQty,
             isReceived: false,
-            _original: { ...rowObj, '登錄號': rawBarcode }
+            _original: { ...rowObj, '登錄號': rawBarcode },
+            _modifiedFields: {}
           });
         });
 
@@ -340,7 +367,7 @@ function App() {
 
     // Prepare data for export
     const exportData = currentBooks.map(book => {
-      const { isReceived, _searchableBarcodes, _scannedBarcodes, _searchableISBNs, _scannedISBNCount, _targetQuantity, _original, _batchId, ...rest } = book;
+      const { isReceived, _searchableBarcodes, _scannedBarcodes, _searchableISBNs, _scannedISBNCount, _targetQuantity, _original, _batchId, _modifiedFields, _id, ...rest } = book;
       
       delete rest['箱號'];
       delete rest['紙插序號'];
@@ -477,13 +504,43 @@ function App() {
           cell.s.font.color = { rgb: "000000" };
           cell.s.fill = { fgColor: { rgb: 'F2F2F2' } };
         } else {
-          // Data rows
-          if (isBookReceived) {
-            // 已經點收完成：一律採用黑色顯示
+          // Check if this specific cell was modified by user
+          let isColModified = false;
+          if (currentBook) {
+            if (currentBook._modifiedFields && currentBook._modifiedFields[colName]) {
+              isColModified = true;
+            } else if (currentBook._original && currentBook._original[colName] !== undefined) {
+              let origVal = String(currentBook._original[colName] ?? '').trim();
+              let currVal = String(currentBook[colName] ?? '').trim();
+
+              origVal = origVal.replace(/^[✓✗Xx\s]+/, '').replace(/\s*\(\d+\/\d+冊\)$/, '').trim();
+              currVal = currVal.replace(/^[✓✗Xx\s]+/, '').replace(/\s*\(\d+\/\d+冊\)$/, '').trim();
+
+              if (colName === '登錄號') {
+                origVal = origVal.replace(/\s+/g, '、');
+                currVal = currVal.replace(/\s+/g, '、');
+              }
+
+              if (origVal !== currVal) {
+                isColModified = true;
+              }
+            }
+          }
+
+          if (isColModified) {
+            // 關鍵需求：有修改過的字，一律標成紅色！
+            cell.s.font.color = { rgb: "FF0000" };
+            cell.s.font.bold = true;
+          } else if (isBookReceived) {
+            // 已經點收完成且未修改：黑色字體
             cell.s.font.color = { rgb: "000000" };
           } else {
-            // 未點收部分（未到館）：採用紅色顯示
-            if (colName === '點收狀態' || colName === 'ISBN' || colName === '登錄號') {
+            // 未點收部分（未到館）：
+            if (colName === '點收狀態') {
+              cell.s.font.color = { rgb: "FF0000" };
+            } else if (currentMode === 'barcode' && colName === '登錄號') {
+              cell.s.font.color = { rgb: "FF0000" };
+            } else if (currentMode === 'isbn' && colName === 'ISBN') {
               cell.s.font.color = { rgb: "FF0000" };
             } else {
               cell.s.font.color = { rgb: "000000" };
@@ -550,6 +607,7 @@ function App() {
 
         const newBooks = [...batch.books];
         const bookIdxInBatch = newBooks.findIndex(b => 
+          (targetBook._id && b._id === targetBook._id) ||
           (b['序號'] && b['序號'] === targetBook['序號'] && b['題名'] === targetBook['題名']) ||
           (b['登錄號'] === targetBook['登錄號'] && b['ISBN'] === targetBook['ISBN'])
         );
@@ -557,7 +615,30 @@ function App() {
         const editIndex = bookIdxInBatch !== -1 ? bookIdxInBatch : index;
         if (!newBooks[editIndex]) return batch;
 
-        newBooks[editIndex] = { ...newBooks[editIndex], [key]: newValue };
+        const bookToEdit = newBooks[editIndex];
+        let isChanged = true;
+        if (bookToEdit._original && bookToEdit._original[key] !== undefined) {
+          let origVal = String(bookToEdit._original[key] ?? '').trim();
+          let newVal = String(newValue ?? '').trim();
+          origVal = origVal.replace(/^[✓✗Xx\s]+/, '').replace(/\s*\(\d+\/\d+冊\)$/, '').trim();
+          newVal = newVal.replace(/^[✓✗Xx\s]+/, '').replace(/\s*\(\d+\/\d+冊\)$/, '').trim();
+          if (key === '登錄號') {
+            origVal = origVal.replace(/\s+/g, ' ');
+            newVal = newVal.replace(/\s+/g, ' ');
+          }
+          isChanged = origVal !== newVal;
+        }
+
+        const updatedModifiedFields = {
+          ...(bookToEdit._modifiedFields || {}),
+          [key]: isChanged
+        };
+
+        newBooks[editIndex] = { 
+          ...bookToEdit, 
+          [key]: newValue,
+          _modifiedFields: updatedModifiedFields
+        };
         
         if (key === '登錄號') {
            const newBarcodes = String(newValue).trim().split(/\s+/).filter(b => b);

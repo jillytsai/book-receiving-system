@@ -3,6 +3,25 @@ import { CheckCircle, Clock } from 'lucide-react';
 
 
 
+const isFieldModified = (book, col) => {
+  if (!book) return false;
+  if (book._modifiedFields && book._modifiedFields[col] !== undefined) {
+    return Boolean(book._modifiedFields[col]);
+  }
+  if (book._original && book._original[col] !== undefined) {
+    let orig = String(book._original[col] ?? '').trim();
+    let curr = String(book[col] ?? '').trim();
+    orig = orig.replace(/^[✓✗Xx\s]+/, '').replace(/\s*\(\d+\/\d+冊\)$/, '').trim();
+    curr = curr.replace(/^[✓✗Xx\s]+/, '').replace(/\s*\(\d+\/\d+冊\)$/, '').trim();
+    if (col === '登錄號') {
+      orig = orig.replace(/\s+/g, ' ');
+      curr = curr.replace(/\s+/g, ' ');
+    }
+    return orig !== curr;
+  }
+  return false;
+};
+
 export default function BookList({ books, onEditBook, receivingMode = 'barcode' }) {
   const topScrollRef = useRef(null);
   const tableContainerRef = useRef(null);
@@ -45,11 +64,14 @@ export default function BookList({ books, onEditBook, receivingMode = 'barcode' 
     '箱號', 
     '紙插序號', 
     '_original', 
+    '_modifiedFields',
+    '_id',
+    '_batchId',
     '書目紀錄ID', 
     '備註'
   ];
   let columns = Object.keys(books[0]).filter(key => {
-    return !excludedKeywords.some(kw => key.includes(kw));
+    return !key.startsWith('_') && !excludedKeywords.some(kw => key.includes(kw));
   });
 
   // Move '來源批次' to the front if present
@@ -83,7 +105,7 @@ export default function BookList({ books, onEditBook, receivingMode = 'barcode' 
           </span>
         </h2>
         <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-          共 {books.length} 筆資料 (點擊表格文字即可直接修改)
+          共 {books.length} 筆資料 (點擊表格文字即可直接修改，修改後將標註紅字)
         </span>
       </div>
 
@@ -180,6 +202,7 @@ export default function BookList({ books, onEditBook, receivingMode = 'barcode' 
                     const isBarcodeCol = col === '登錄號';
                     const isISBNCol = col === 'ISBN';
                     const isNumberCol = col === '序號' || col === '編號';
+                    const isModified = isFieldModified(book, col);
 
                     let tdStyle = { verticalAlign: 'top' };
                     if (isTitle) {
@@ -234,9 +257,15 @@ export default function BookList({ books, onEditBook, receivingMode = 'barcode' 
                             contentEditable={true}
                             suppressContentEditableWarning={true}
                             spellCheck={false}
+                            title={isModified ? `此欄位已被修改（原始內容：${book._original?.[col] ?? '空白'}）` : undefined}
                             onBlur={(e) => {
                               const rawValue = e.target.innerText.trim();
-                              const cleanValue = rawValue.replace(/^[✓✗Xx\s]+/, '').replace(/\s*\([^)]*\)$/, '').trim();
+                              let cleanValue = rawValue;
+                              if (isISBNCol) {
+                                cleanValue = rawValue.replace(/^[✓✗Xx\s]+/, '').replace(/\s*\(\d+\/\d+冊\)$/, '').trim();
+                              } else if (isBarcodeCol) {
+                                cleanValue = rawValue.replace(/^[✓✗Xx\s]+/, '').replace(/\s*\(未點\)$/, '').trim();
+                              }
                               if (cleanValue !== String(book[col] || '').trim()) {
                                 onEditBook(index, col, cleanValue);
                               }
@@ -245,31 +274,42 @@ export default function BookList({ books, onEditBook, receivingMode = 'barcode' 
                               outline: 'none',
                               minHeight: '1.5em',
                               cursor: 'text',
-                              padding: '0.25rem',
+                              padding: '0.25rem 0.4rem',
                               borderRadius: '4px',
-                              transition: 'background 0.2s',
-                              color: (receivingMode === 'barcode' && isBarcodeCol && !isAllReceived && allBarcodes.length <= 1) ||
-                                     (receivingMode === 'isbn' && isISBNCol && !isAllReceived && targetQty <= 1)
-                                       ? '#ef4444' 
-                                       : 'inherit'
+                              transition: 'all 0.2s',
+                              backgroundColor: isModified ? 'rgba(239, 68, 68, 0.12)' : 'transparent',
+                              border: isModified ? '1px dashed rgba(239, 68, 68, 0.5)' : '1px solid transparent',
+                              color: isModified
+                                ? '#ef4444'
+                                : (receivingMode === 'barcode' && isBarcodeCol && !isAllReceived && allBarcodes.length <= 1) ||
+                                   (receivingMode === 'isbn' && isISBNCol && !isAllReceived && targetQty <= 1)
+                                     ? '#ef4444' 
+                                     : 'inherit',
+                              fontWeight: isModified ? 600 : 'normal'
                             }}
                             onFocus={(e) => e.target.style.background = 'rgba(255,255,255,0.1)'}
-                            onMouseLeave={(e) => { if (document.activeElement !== e.target) e.target.style.background = 'transparent'; }}
-                            onMouseEnter={(e) => { if (document.activeElement !== e.target) e.target.style.background = 'rgba(255,255,255,0.05)'; }}
+                            onMouseLeave={(e) => { if (document.activeElement !== e.target) e.target.style.background = isModified ? 'rgba(239, 68, 68, 0.12)' : 'transparent'; }}
+                            onMouseEnter={(e) => { if (document.activeElement !== e.target) e.target.style.background = isModified ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255,255,255,0.05)'; }}
                           >
                             {/* Barcode column custom rendering in barcode mode */}
                             {receivingMode === 'barcode' && isBarcodeCol && allBarcodes.length > 1 ? (
                               allBarcodes.map((bCode, bIdx) => {
                                 const isBScanned = scannedBarcodes.includes(bCode);
                                 return (
-                                  <div key={bIdx} style={{ color: isBScanned ? '#10b981' : '#ef4444', fontWeight: isBScanned ? 400 : 600 }}>
+                                  <div key={bIdx} style={{ 
+                                    color: isModified ? '#ef4444' : (isBScanned ? '#10b981' : '#ef4444'), 
+                                    fontWeight: isModified || !isBScanned ? 600 : 400 
+                                  }}>
                                     {isBScanned ? `✓ ${bCode}` : `✗ ${bCode} (未點)`}
                                   </div>
                                 );
                               })
                             ) : receivingMode === 'isbn' && isISBNCol ? (
                               /* ISBN column custom rendering in ISBN mode */
-                              <div style={{ color: isAllReceived ? '#10b981' : isPartialReceived ? '#f59e0b' : '#ef4444', fontWeight: isAllReceived ? 400 : 600 }}>
+                              <div style={{ 
+                                color: isModified ? '#ef4444' : (isAllReceived ? '#10b981' : isPartialReceived ? '#f59e0b' : '#ef4444'), 
+                                fontWeight: isModified || !isAllReceived ? 600 : 400 
+                              }}>
                                 {isAllReceived ? `✓ ${String(book[col] || '').replace(/^[✓✗Xx\s]+/, '')}` : `✗ ${String(book[col] || '').replace(/^[✓✗Xx\s]+/, '')}`}
                                 {targetQty > 1 && (
                                   <span style={{ fontSize: '0.85em', marginLeft: '4px', opacity: 0.9 }}>
